@@ -19,37 +19,31 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-# === EDIT ====================================================================
 
-SERVER = 'http://localhost:12345'
+"""
+Submission script
 
-# admin usernname and password
-ADMIN = 'administrator'
-ADMIN_PASSWORD = 'password'
+Usage:
+  create_test2_repere_corpus.py <serverURL> <port> <user> <password> <media_path> <media.lst>
+  create_test2_repere_corpus.py -h | --help
+"""
 
-# template of path to video files (relative to /media)
-URL = 'REPERE/phase2/test/{name}'
-
-# =============================================================================
-
+from docopt import docopt
 from camomile import Camomile
 
-client = Camomile(SERVER)
+if __name__ == '__main__':
+    # read args
+    args = docopt(__doc__)
 
-# login as admin
-client.login(ADMIN, ADMIN_PASSWORD)
+    client = Camomile(args['<serverURL>']+":"+args['<port>'])    
+    client.login(args['<user>'], args['<password>'])
 
-# create new corpus
-corpus = client.createCorpus('REPERE_TEST2', returns_id=True)
+    # template of path to video files (relative to /media)
+    URL = args['<media_path>']
 
-# add media to corpus and keep track of their IDs
-mediaID = {}
-with open('media.lst', 'r') as f:
-    for medium in f:
+    # create new corpus
+    corpus = client.createCorpus('REPERE_TEST2', returns_id=True)
 
-        # remove trailing "\n"
-        name = medium.strip()
-
-        # create medium
-        mediaID[name] = client.createMedium(
-            corpus, name, url=URL.format(name=name), returns_id=True)
+    # add media to corpus
+    for medium in open(args['<media.lst>']).read().splitlines():
+        client.createMedium(corpus, medium, url=URL+medium)
