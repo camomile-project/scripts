@@ -24,7 +24,7 @@
 Submission script
 
 Usage:
-  submission.py <server> <port> <user> <password> <MESegFile> <submissionName>
+  submission.py <server> <port> <user> <password> <corpusName> <submissionName> <label> <evidence>
   submission.py -h | --help
 """
 
@@ -35,30 +35,66 @@ if __name__ == '__main__':
     # read args
     args = docopt(__doc__)
 
-    client = Camomile(args['<server>'])+":"+args['<port>']))
-    client.login(args['<user>']), args['<password>']))
+    client = Camomile(args['<server>']+":"+args['<port>'])
+    client.login(args['<user>'], args['<password>'])
+
+    id_corpus = client.getCorpora(name=args['<corpusName>'], returns_id=True)[0]
 
     # create layer
-    id_layer = client.createLayer(
-        corpus, args['<submissionName>']),
-        fragment_type='segment',
-        data_type='label+confidence',
-        returns_id=True)
+    id_layer_label = client.createLayer(id_corpus, 
+                                        args['<submissionName>']+".label",
+                                        description={"id_label": "", "submission": "primary", "status": "workInProgress"},
+                                        fragment_type='mediaeval.persondiscovery._id_shot',
+                                        data_type='mediaeval.persondiscovery.evidence',
+                                        returns_id=True)
 
-    # parse MESeg
-    annotations = {}
-    idMedias = {}
-    for line in open(args['<MESegFile>']).read().splitlines():
-        videoID, startTime, endTime, startFrame, endFrame, trackID, label, conf = line.split(' ')
-        if videoID not in idMedias:
-            idMedias[videoID] = client.getMedia(corpus=corpus, name=videoID)
-        anno = {'fragment': {'start': startTime, 'end': endTime},
-                'data': {"PersonName":label, "confidence":conf},
-                'id_medium': idMedias[videoID],
-               }
-        annotations.setdefault(videoID, []).append(anno)
+    id_layer_evidence = client.createLayer(id_corpus, 
+                                           args['<submissionName>']+".evidence",
+                                           description={"id_evidence": "", "submission": "primary", "status": "workInProgress"},
+                                           fragment_type='mediaeval.persondiscovery._id_shot',
+                                           data_type='mediaeval.persondiscovery.evidence',
+                                           returns_id=True)
 
-    # create annotations
-    for videoID in annotations:
-        client.createAnnotations(id_layer, annotations[videoID])
+    id_layer = client.getLayers(corpus=id_corpus, name="submission shot", returns_id=True)[0]
 
+    id_shots = {}
+    for shot in client.getAnnotations(layer=id_layer):
+        id_shots.setdefault(shot['id_medium'], {})
+        id_shots[shot['id_medium']][shot['fragment']['shot_number']] = shot['_id']
+
+    id_media = {}
+    for media in client.getMedia(corpus=id_corpus):
+        id_media[media['name']] = media['_id']
+    
+    # parse label
+    labels = {}
+    for line in open(args['<label>']).read().splitlines():
+        videoID, shotNumber, personName, confidence = line.split(' ')
+        label = {"id_layer": id_layer_label,
+                 "id_medium": id_media[videoID],
+                 "fragment": id_shots[id_media[videoID]][shotNumber],
+                 "data" : {"person_name": personName, "confidence": confidence}
+                }
+        labels.setdefault(videoID, []).append(label)
+
+    # parse evidence
+    evidences = {}
+    for line in open(args['<evidence>']).read().splitlines():
+        personName, videoID, shotNumber, source = line.split(' ')
+        evidence = {"id_layer": id_layer_evidence,
+                    "id_medium": id_media[videoID],
+                    "fragment": id_shots[id_media[videoID]][shotNumber],
+                    "data" : {"person_name": personName, "source": source}
+                }
+        evidences.setdefault(videoID, []).append(evidence)
+
+    # add labels
+    for videoID in labels:
+        client.createAnnotations(id_layer_label, labels[videoID])
+    for videoID in evidences:
+        client.createAnnotations(id_layer_evidence, evidences[videoID])
+
+    # update layer status and cross id
+    client.updateLayer(id_layer_label, description={"id_evidence": id_layer_evidence, "submission": "primary", "status": "complete"})
+    client.updateLayer(id_layer_evidence, description={"id_label": id_layer_label, "submission": "primary", "status": "complete"})
+    
