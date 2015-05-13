@@ -20,30 +20,28 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-"""
-Submission script
-
-Usage:
-  create_test2_repere_corpus.py <serverURL> <port> <user> <password> <media_path> <media.lst>
-  create_test2_repere_corpus.py -h | --help
-"""
-
-from docopt import docopt
+import ConfigParser
 from camomile import Camomile
+import sys
 
 if __name__ == '__main__':
-    # read args
-    args = docopt(__doc__)
+    # read config
+    Config = ConfigParser.ConfigParser()
+    Config.read("config.ini")
 
-    client = Camomile(args['<serverURL>']+":"+args['<port>'])    
-    client.login(args['<user>'], args['<password>'])
+    server = Config.get('mainSection', 'url')+":"+Config.get('mainSection', 'port')
+    userAdmin = Config.get('userSection', 'userAdmin')
+    pwdAdmin = Config.get('userSection', 'pwdAdmin')
+    corpusName = Config.get('ressourceSection', 'corpusName')
+    pathToVideo = Config.get('ressourceSection', 'pathToVideo')
+    mediaList = Config.get('ressourceSection', 'mediaList')
 
-    # template of path to video files (relative to /media)
-    URL = args['<media_path>']
+    client = Camomile(server)
+    client.login(userAdmin, pwdAdmin)
 
     # create new corpus
-    corpus = client.createCorpus('REPERE_TEST2', returns_id=True)
+    id_corpus = client.createCorpus(corpusName, returns_id=True)
 
     # add media to corpus
-    for medium in open(args['<media.lst>']).read().splitlines():
-        client.createMedium(corpus, medium, url=URL+medium)
+    for mediumName in open(mediaList).read().splitlines():
+        client.createMedium(id_corpus, mediumName, url=pathToVideo+mediumName)

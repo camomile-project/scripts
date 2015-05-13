@@ -31,47 +31,29 @@ if __name__ == '__main__':
     server = Config.get('mainSection', 'url')+":"+Config.get('mainSection', 'port')
     userAdmin = Config.get('userSection', 'userAdmin')
     pwdAdmin = Config.get('userSection', 'pwdAdmin')
+    user1 = Config.get('userSection', 'user1')
+    pwdUser1 = Config.get('userSection', 'pwdUser1')
+    roleUser1 = Config.get('userSection', 'roleUser1')
     corpusName = Config.get('ressourceSection', 'corpusName')
-    shotLayerName = Config.get('ressourceSection', 'shotLayerName')
-    shotList = Config.get('ressourceSection', 'shotList')
+    shotLayerName = Config.get('ressourceSection', 'shotLayerName')    
 
     client = Camomile(server)
     client.login(userAdmin, pwdAdmin)
 
     id_corpus = client.getCorpora(name=corpusName, returns_id=True)
     if id_corpus == []:
-        print args['<corpusName>'], 'is not found in the database'
+        print corpusName, 'is not found in the database'
         sys.exit(0)
     id_corpus = id_corpus[0]
 
-    # create layer
-    id_layer = client.createLayer(id_corpus, 
-                                  shotLayerName,
-                                  description={"source": "https://raw.githubusercontent.com/MediaevalPersonDiscoveryTask/metadata/master/dev/submission_shot/test2.shot"},
-                                  fragment_type='mediaeval.persondiscovery.shot',
-                                  data_type='empty', 
-                                  returns_id=True)
+    id_layer = client.getLayers(name=shotLayerName, returns_id=True)
+    if id_layer == []:
+        print shotLayerName, 'is not found in the database'
+        sys.exit(0)
+    id_layer = id_layer[0]
 
-    # get id_media
-    id_media = {}
-    for media in client.getMedia(corpus=id_corpus):
-        id_media[media['name']] = media['_id']
+    id_user = client.createUser(user1, pwdUser1, role=roleUser1, returns_id=True)
 
-    # parse shot segmentation
-    shots = {}
-    for line in open(shotList).read().splitlines():
-        videoID, shotID, startTime, endTime, startFrame, endFrame = line.split(' ')
-        shot = {"id_layer": id_layer,
-                "id_medium": id_media[videoID],
-                "fragment": {"shot_number": shotID,
-                             "segment": {"start": startTime, "end": endTime},
-                             "frames": {"start": startFrame, "end": endFrame} 
-                            },
-                "data" : {}
-               }
-        shots.setdefault(videoID, []).append(shot)
-
-    # create annotations
-    for videoID in shots:
-        client.createAnnotations(id_layer, shots[videoID])
+    client.setCorpusRights(id_corpus, client.ADMIN, user=id_user)
+    client.setLayerRights(id_layer, client.READ, user=id_user)
 
