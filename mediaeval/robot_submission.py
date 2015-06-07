@@ -41,7 +41,6 @@ Options:
   --url=URL                Submission server URL
                            [default: http://api.mediaeval.niderb.fr]
   --password=P45sw0Rd      Password
-  --dryrun                 Dry-run
 
 """
 
@@ -50,9 +49,8 @@ from docopt import docopt
 
 arguments = docopt(__doc__, version='0.1')
 url = arguments['--url']
-dryrun = arguments['--dryrun']
 
-robot = RobotCamomile(url, 'robot_submission', dryrun=dryrun)
+robot = RobotCamomile(url, 'robot_submission')
 
 submissionQueue = robot.getQueueByName('mediaeval.submission.in')
 robot_evidence = robot.getUserByName('robot_evidence')
