@@ -57,6 +57,7 @@ robot_evidence = robot.getUserByName('robot_evidence')
 evidenceSubmissionQueue = robot.getQueueByName(
     'mediaeval.submission.evidence.in')
 
+# forever loop on submission queue
 for item in robot.dequeue_loop(submissionQueue):
 
     # withdrawn submission
@@ -65,11 +66,20 @@ for item in robot.dequeue_loop(submissionQueue):
 
     # duplicate evidence layer
     id_evidence = item.id_evidence
-    evidence = robot.duplicate_layer(id_evidence, returns_id=False)
+    try:
+        # in a try/except scope because it might have been deleted by now
+        evidence = robot.duplicate_layer(id_evidence, returns_id=False)
+    except Exception, e:
+        continue
 
     # duplicate label layer
     id_label = item.id_label
-    label = robot.duplicate_layer(id_label, returns_id=False)
+    try:
+        # in a try/except scope because it might have been deleted by now
+        label = robot.duplicate_layer(id_label, returns_id=False)
+    except Exception, e:
+        robot.deleteLayer(evidence._id)
+        continue
 
     # update evidence --> label cross-reference
     evidence.description.id_label = label._id
@@ -90,3 +100,7 @@ for item in robot.dequeue_loop(submissionQueue):
 
     # enqueue evidence layer
     robot.enqueue(evidenceSubmissionQueue, evidence._id)
+
+    print "new submission - {team:s} - {name:s}".format(
+        team=robot.getGroup(item.id_team).name,
+        name=item.name)
