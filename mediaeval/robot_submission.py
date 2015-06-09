@@ -86,9 +86,7 @@ for item in robot.dequeue_loop(submissionQueue):
     robot.updateLayer(evidence._id, description=evidence.description)
 
     # update label --> evidence cross-reference
-    # add empty {personName: correctedPersonName} mapping
     label.description.id_evidence = evidence._id
-    label.description.mapping = {}
     robot.updateLayer(label._id, description=label.description)
 
     # give READ permission to robot_evidence
@@ -98,8 +96,9 @@ for item in robot.dequeue_loop(submissionQueue):
     # (allowing to later update the mapping)
     robot.setLayerPermissions(label._id, robot.ADMIN, user=robot_evidence)
 
-    # enqueue evidence layer
-    robot.enqueue(evidenceSubmissionQueue, evidence._id)
+    # enqueue evidence and label layers
+    robot.enqueue(evidenceSubmissionQueue, {'evidence': evidence._id,
+                                            'label': label._id})
 
     print "new submission - {team:s} - {name:s}".format(
         team=robot.getGroup(item.id_team).name,
