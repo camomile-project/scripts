@@ -48,9 +48,11 @@ from common import RobotCamomile
 from docopt import docopt
 
 arguments = docopt(__doc__, version='0.1')
-url = arguments['--url']
 
-robot = RobotCamomile(url, 'robot_submission')
+url = arguments['--url']
+password = arguments['--password']
+
+robot = RobotCamomile(url, 'robot_submission', password=password)
 
 submissionQueue = robot.getQueueByName('mediaeval.submission.in')
 robot_evidence = robot.getUserByName('robot_evidence')

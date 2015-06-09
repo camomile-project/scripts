@@ -39,7 +39,7 @@ class RobotCamomile(Camomile):
         self.dryrun = dryrun
         self.period = period
         if password is None:
-            password = getpass()
+            password = getpass('Password for %s: ' % login)
         self.login(login, password)
 
     def getUserByName(self, name):
