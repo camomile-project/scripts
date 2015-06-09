@@ -69,9 +69,24 @@ class RobotCamomile(Camomile):
         msg = 'Found too many (%d) queues with name "%s".'
         raise ValueError(msg % (len(matchingQueues, name)))
 
-    def getLayerByName(self, name):
+    def getCorpusByName(self, name):
 
-        matchingLayers = [layer._id for layer in self.getLayers()
+        matchingCorpora = [corpus._id for corpus in self.getCorpora()
+                           if corpus.name == name]
+
+        if len(matchingCorpora) == 1:
+            return matchingCorpora[0]
+
+        if len(matchingCorpora) < 1:
+            msg = 'Could not find any corpus with name "%s".'
+            raise ValueError(msg % name)
+
+        msg = 'Found too many (%d) queues with name "%s".'
+        raise ValueError(msg % (len(matchingCorpora, name)))
+
+    def getLayerByName(self, corpus, name):
+
+        matchingLayers = [layer._id for layer in self.getLayers(corpus)
                           if layer.name == name]
 
         if len(matchingLayers) == 1:
@@ -129,3 +144,18 @@ class RobotCamomile(Camomile):
             return copy
 
         return self.getLayer(copy)
+
+    def getAnnotations_iter(self, layer, returns_id=False):
+        corpus = self.getLayer(layer).id_corpus
+        media = self.getMedia(corpus, returns_id=True)
+        for medium in media:
+            annotations = self.getAnnotations(
+                layer=layer, medium=medium, returns_id=returns_id)
+            yield medium, annotations
+
+    def emptyLayerByName(self, corpus, name):
+
+        layer = self.getLayerByName(corpus, name)
+        for _, annotations in self.getAnnotations_iter(layer, returns_id=True):
+            for annotation in annotations:
+                self.deleteAnnotation(annotation)
