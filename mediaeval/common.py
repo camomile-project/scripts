@@ -34,23 +34,25 @@ import numpy as np
 from sklearn.isotonic import IsotonicRegression
 from pandas import read_table
 
+import os.path
+
 import logging
-from logging import Formatter
-from logging.handlers import TimedRotatingFileHandler, NullHandler
+from logging import Formatter, NullHandler
+from logging.handlers import TimedRotatingFileHandler
 
 
-def create_logger(robot, logfile, debug=False):
+def create_logger(robot, path=None, debug=False):
 
+    if path is None:
+        return NullHandler()
+
+    logFile = os.path.join(path, robot + '.log')
     logger = logging.getLogger(robot)
-
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
-
-    handler = TimedRotatingFileHandler(logfile, when='midnight')
-
+    handler = TimedRotatingFileHandler(logFile, when='midnight')
     formatter = Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
-
     logger.addHandler(handler)
 
     return logger
@@ -141,7 +143,7 @@ class RobotCamomile(Camomile):
                 yield item
             except Exception:
                 self.logger.debug(
-                    'empty queue (waiting for for %ds)' % self.period)
+                    'empty queue (waiting for %ds)' % self.period)
                 time.sleep(self.period)
 
     def duplicate_layer(self, layer, returns_id=False):
