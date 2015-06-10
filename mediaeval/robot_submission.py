@@ -40,19 +40,28 @@ Options:
   --debug                  Show debug information.
   --url=URL                Submission server URL
                            [default: http://api.mediaeval.niderb.fr]
-  --password=P45sw0Rd      Password
+  --password=P45sw0Rd      Password.
+  --period=N               Query queue every N seconds [default: 600].
+  --log=DIR                Path to log directory.
 
 """
 
-from common import RobotCamomile
+from common import RobotCamomile, create_logger
 from docopt import docopt
 
 arguments = docopt(__doc__, version='0.1')
 
 url = arguments['--url']
 password = arguments['--password']
+period = int(arguments['--period'])
 
-robot = RobotCamomile(url, 'robot_submission', password=password)
+debug = arguments['--debug']
+log = arguments['--log']
+logger = create_logger('robot_submission', path=log, debug=debug)
+
+robot = RobotCamomile(
+    url, 'robot_submission', password=password,
+    period=period, logger=logger)
 
 submissionQueue = robot.getQueueByName('mediaeval.submission.in')
 robot_evidence = robot.getUserByName('robot_evidence')
@@ -62,12 +71,23 @@ evidenceSubmissionQueue = robot.getQueueByName(
 # forever loop on submission queue
 for item in robot.dequeue_loop(submissionQueue):
 
+    id_evidence = item.id_evidence
+    id_label = item.id_label
+
     # withdrawn submission
     if hasattr(item, 'deletedBy'):
+        logger.info(
+            "deletion - {team:s} - {name:s} - {evidence:s} / {label:s}".format(
+                team=robot.getGroup(item.id_team).name, name=item.name,
+                evidence=id_evidence, label=id_label))
         continue
 
+    logger.info(
+        "submission - {team:s} - {name:s} - {evidence:s} / {label:s}".format(
+            team=robot.getGroup(item.id_team).name, name=item.name,
+            evidence=id_evidence, label=id_label))
+
     # duplicate evidence layer
-    id_evidence = item.id_evidence
     try:
         # in a try/except scope because it might have been deleted by now
         evidence = robot.duplicate_layer(id_evidence, returns_id=False)
@@ -75,7 +95,6 @@ for item in robot.dequeue_loop(submissionQueue):
         continue
 
     # duplicate label layer
-    id_label = item.id_label
     try:
         # in a try/except scope because it might have been deleted by now
         label = robot.duplicate_layer(id_label, returns_id=False)
@@ -102,6 +121,7 @@ for item in robot.dequeue_loop(submissionQueue):
     robot.enqueue(evidenceSubmissionQueue, {'evidence': evidence._id,
                                             'label': label._id})
 
-    print "new submission - {team:s} - {name:s}".format(
-        team=robot.getGroup(item.id_team).name,
-        name=item.name)
+    logger.info(
+        "duplication - {team:s} - {name:s} - {evidence:s} / {label:s}".format(
+            team=robot.getGroup(item.id_team).name, name=item.name,
+            evidence=evidence._id, label=label._id))
