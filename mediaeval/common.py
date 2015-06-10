@@ -30,6 +30,10 @@ from camomile import Camomile
 from getpass import getpass
 import time
 
+import numpy as np
+from sklearn.isotonic import IsotonicRegression
+from pandas import read_table
+
 
 class RobotCamomile(Camomile):
 
@@ -159,3 +163,36 @@ class RobotCamomile(Camomile):
         for _, annotations in self.getAnnotations_iter(layer, returns_id=True):
             for annotation in annotations:
                 self.deleteAnnotation(annotation)
+
+
+class HTMLTime(object):
+    """
+    >>> htmlTime = HTMLTime(pathToIDX)
+    >>> t = htmlTime(frameNumber)
+    """
+
+    def __init__(self, idx):
+        super(HTMLTime, self).__init__()
+        self.idx = idx
+
+        # load .idx file using pandas
+        df = read_table(
+            self.idx, sep='\s+',
+            names=['frame_number', 'frame_type', 'bytes', 'seconds']
+        )
+        x = np.array(df['frame_number'], dtype=np.float)
+        y = np.array(df['seconds'], dtype=np.float)
+
+        # train isotonic regression
+        self.ir = IsotonicRegression(y_min=np.min(y), y_max=np.max(y))
+        self.ir.fit(x, y)
+
+        # frame number support
+        self.xmin = np.min(x)
+        self.xmax = np.max(x)
+
+    def __call__(self, frameNumber):
+
+        return self.ir.transform([min(self.xmax,
+                                      max(self.xmin, frameNumber)
+                                      )])[0]
