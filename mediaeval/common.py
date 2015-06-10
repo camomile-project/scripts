@@ -116,6 +116,7 @@ class RobotCamomile(Camomile):
                 item = self.dequeue(queue)
                 yield item
             except Exception:
+                print 'Queue is empty -- sleeping for %d seconds' % self.period
                 time.sleep(self.period)
 
     def duplicate_layer(self, layer, returns_id=False):
