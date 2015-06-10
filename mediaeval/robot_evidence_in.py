@@ -46,7 +46,6 @@ Options:
 
 from common import RobotCamomile
 from docopt import docopt
-from getpass import getpass
 
 arguments = docopt(__doc__, version='0.1')
 
@@ -109,13 +108,18 @@ for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
             if (id_shot, person_name, source) in mapping:
 
                 # propagate this evidence to this submission mapping
-                description = robot.getLayer(id_submission).description
-                # (initialize empty mapping if needed)
-                _ = description.setdefault('mapping', {})
-                description.mapping[person_name] = mapping[id_shot,
-                                                           person_name,
-                                                           source]
-                robot.updateLayer(id_submission, description=description)
+                # if the submission copy still exists...
+                # (it might have been deleted by hands to free some space)
+                try:
+                    description = robot.getLayer(id_submission).description
+                    # (initialize empty mapping if needed)
+                    _ = description.setdefault('mapping', {})
+                    description.mapping[person_name] = mapping[id_shot,
+                                                               person_name,
+                                                               source]
+                    robot.updateLayer(id_submission, description=description)
+                except Exception:
+                    pass
 
             # if this hypothesized evidence has not been checked yet
             # push to evidence annotation frontend

@@ -83,9 +83,13 @@ for item in robot.dequeue_loop(evidenceOutQueue):
     # front-end input
     id_shot = item.input.id_shot
     id_medium = item.input.id_medium
-    id_submission = item.input.id_submission
     person_name = item.input.person_name
     source = item.input.source
+
+    # id_submission might be missing in case evidences
+    # were added manually to the queue independently of
+    # any submissions
+    id_submission = item.input.get('id_submission', None)
 
     # front-end output
     is_evidence = item.output.is_evidence
@@ -121,10 +125,15 @@ for item in robot.dequeue_loop(evidenceOutQueue):
         print "new evidence - {name:s}".format(name=person_name)
 
     # propagate this evidence to the corresponding submission mapping
-    description = robot.getLayer(id_submission).description
-    # (initialize empty mapping if needed)
-    _ = description.setdefault('mapping', {})
-    description.mapping[person_name] = mapping[id_shot,
-                                               person_name,
-                                               source]
-    robot.updateLayer(id_submission, description=description)
+    # if the submission copy still exists...
+    # (it might have been deleted by hands to free some space)
+    try:
+        description = robot.getLayer(id_submission).description
+        # (initialize empty mapping if needed)
+        _ = description.setdefault('mapping', {})
+        description.mapping[person_name] = mapping[id_shot,
+                                                   person_name,
+                                                   source]
+        robot.updateLayer(id_submission, description=description)
+    except Exception:
+        pass
