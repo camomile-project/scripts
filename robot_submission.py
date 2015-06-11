@@ -77,14 +77,14 @@ for item in robot.dequeue_loop(submissionQueue):
     # withdrawn submission
     if hasattr(item, 'deletedBy'):
         logger.info(
-            "deletion - {team:s} - {name:s} - {evidence:s} / {label:s}".format(
-                team=robot.getGroup(item.id_team).name, name=item.name,
+            "del - {team:s}.{user:s} - {evidence:s}.{label:s}".format(
+                team=item.team, user=item.user,
                 evidence=id_evidence, label=id_label))
         continue
 
     logger.info(
-        "submission - {team:s} - {name:s} - {evidence:s} / {label:s}".format(
-            team=robot.getGroup(item.id_team).name, name=item.name,
+        "new - {team:s}.{user:s} - {name:s} - {evidence:s}.{label:s}".format(
+            team=item.team, user=item.user, name=item.name,
             evidence=id_evidence, label=id_label))
 
     # duplicate evidence layer
@@ -120,8 +120,3 @@ for item in robot.dequeue_loop(submissionQueue):
     # enqueue evidence and label layers
     robot.enqueue(evidenceSubmissionQueue, {'evidence': evidence._id,
                                             'label': label._id})
-
-    logger.info(
-        "duplication - {team:s} - {name:s} - {evidence:s} / {label:s}".format(
-            team=robot.getGroup(item.id_team).name, name=item.name,
-            evidence=evidence._id, label=label._id))
