@@ -38,35 +38,47 @@ Options:
   -h --help                Show this screen.
   --version                Show version.
   --debug                  Show debug information.
-  --api=URL                Submission server URL
+  --url=URL                Submission server URL
                            [default: http://api.mediaeval.niderb.fr]
   --password=P45sw0Rd      Password
   --mp4=PATH               Path to MP4 directory.
   --idx=PATH               Path to IDX directory.
   --size=N                 Mugshot size in pixel [default: 100].
   --multiple=N             Number of mugshot in animation [default: 5].
+  --period=N               Update mugshot every N sec [default: 10800].
+  --log=DIR                Path to log directory.
+
 """
 
 from common import RobotCamomile
 from common import HTMLTime
+from common import create_logger
 from docopt import docopt
 import cv
 import cv2
+import time
 import numpy as np
 from base64 import b64encode
 import random
 
 arguments = docopt(__doc__, version='0.1')
 
-api = arguments['--api']
-password = arguments['--password']
 mp4 = arguments['--mp4']
 idx = arguments['--idx']
 size = int(arguments['--size'])
 multiple = int(arguments['--multiple'])
 
-robot = RobotCamomile(api, 'robot_evidence', password=password)
+url = arguments['--url']
+password = arguments['--password']
+period = int(arguments['--period'])
 
+debug = arguments['--debug']
+log = arguments['--log']
+logger = create_logger('robot_mugshot', path=log, debug=debug)
+
+robot = RobotCamomile(
+    url, 'robot_evidence', password=password,
+    period=period, logger=logger)
 
 # unique layer containing manual annotations
 test = robot.getCorpusByName('mediaeval.test')
@@ -80,122 +92,143 @@ mugshotLayer = robot.getLayerByName(
 # loop on evidences, medium by medium
 mediumEvidence = {}
 urls = {}
-for medium, evidences in robot.getAnnotations_iter(evidenceGroundtruthLayer):
-
-    mediumEvidence[medium] = {}
-
-    urls[medium] = robot.getMedium(medium).url
-
-    for evidence in evidences:
-
-        if not evidence.data.is_evidence:
-            continue
-
-        person_name = evidence.data.corrected_person_name
-        t = float(evidence.data.mugshot.time)
-
-        mediumEvidence[medium].setdefault(t, {})[person_name] = \
-            evidence.data.mugshot.bounding_box
 
 # BAD: hard-coded
 WIDTH = 384
 HEIGHT = 288
 
-pngs = {}
 
-for medium, url in urls.iteritems():
+while True:
 
-    htmlTime = HTMLTime('{idx}/{url}.idx'.format(idx=idx, url=url))
-    capture = cv2.VideoCapture('{mp4}/{url}.mp4'.format(mp4=mp4, url=url))
+    logger.info('collecting evidences')
 
-    t = -np.inf
-    for T in sorted(mediumEvidence[medium]):
+    for medium, evidences in robot.getAnnotations_iter(
+            evidenceGroundtruthLayer):
 
-        # read frame by frame until we reach time T
-        while t < T:
-            _, frame = capture.read()
-            frameNumber = int(capture.get(cv.CV_CAP_PROP_POS_FRAMES))
-            t = htmlTime(frameNumber)
+        mediumEvidence[medium] = {}
 
-        # DAR/PAR mismatch
-        resized = cv2.resize(frame, (WIDTH, HEIGHT))
+        urls[medium] = robot.getMedium(medium).url
 
-        # extract mugshot as PNG data
-        for person_name, bounding_box in mediumEvidence[medium][T].iteritems():
-            x, y = int(bounding_box.x * WIDTH), int(bounding_box.y * HEIGHT)
-            w, h = int(bounding_box.w * WIDTH), int(bounding_box.h * HEIGHT)
-            mugshot = cv2.resize(resized[y:y + h, x:x + w], (size, size))
+        for evidence in evidences:
 
-            # first time we meet this person
-            # quickly add/update its mugshot
-            if person_name not in pngs:
+            if not evidence.data.is_evidence:
+                continue
 
-                # extract base64 PNG dump
-                _, stream = cv2.imencode('.png', mugshot)
-                png = b64encode(stream)
+            person_name = evidence.data.corrected_person_name
+            t = float(evidence.data.mugshot.time)
 
-                # get existing annotations for this person
-                # (there should be at most one)
-                annotations = robot.getAnnotations(layer=mugshotLayer,
-                                                   fragment=person_name)
+            mediumEvidence[medium].setdefault(t, {})[person_name] = \
+                evidence.data.mugshot.bounding_box
 
-                # if there is one, get its data content and update 'png' field
-                # (it might contain other field than 'png')
-                if annotations:
-                    data = annotations[0].data
-                    data.png = png
+    pngs = {}
 
-                # if not, create it from scratch
-                else:
-                    data = {'png': png}
+    for medium, url in urls.iteritems():
 
-                # create new annotation (don't update as it might lead
-                # to very heavy history)
-                _ = robot.createAnnotation(mugshotLayer, medium=medium,
-                                           fragment=person_name, data=data,
-                                           returns_id=True)
+        logger.info('mugshot - medium: {medium:s}'.format(
+            medium=medium))
 
-                # delete old annotation(s)
-                for annotation in annotations:
-                    robot.deleteAnnotation(annotation._id)
+        htmlTime = HTMLTime('{idx}/{url}.idx'.format(idx=idx, url=url))
+        capture = cv2.VideoCapture('{mp4}/{url}.mp4'.format(mp4=mp4, url=url))
 
-            # maintain the set of all mugshots as a list of numpy array
-            pngs.setdefault(person_name, []).append(mugshot)
+        t = -np.inf
+        for T in sorted(mediumEvidence[medium]):
 
-# build wide png for css-animated mugshots for each person
-for person_name, mugshots in pngs.iteritems():
+            # read frame by frame until we reach time T
+            while t < T:
+                _, frame = capture.read()
+                frameNumber = int(capture.get(cv.CV_CAP_PROP_POS_FRAMES))
+                t = htmlTime(frameNumber)
 
-    # randomly select at most --multiple mugshots and concatenate them
-    mugshot = np.hstack(random.sample(mugshots, min(multiple, len(mugshots))))
+            # DAR/PAR mismatch
+            resized = cv2.resize(frame, (WIDTH, HEIGHT))
 
-    # build one wide png out of those multiple mugshots
-    _, stream = cv2.imencode('.png', mugshot)
-    png = b64encode(stream)
+            # extract mugshot as PNG data
+            for person_name, bbox in mediumEvidence[medium][T].iteritems():
+                x, y = int(bbox.x * WIDTH), int(bbox.y * HEIGHT)
+                w, h = int(bbox.w * WIDTH), int(bbox.h * HEIGHT)
+                mugshot = cv2.resize(resized[y:y + h, x:x + w], (size, size))
 
-    # get existing annotations for this person
-    # (there should be at most one)
-    annotations = robot.getAnnotations(layer=mugshotLayer,
-                                       fragment=person_name)
+                # first time we meet this person
+                # quickly add/update its mugshot
+                if person_name not in pngs:
 
-    # if there is one, get its data content and update 'PNG' field
-    # (it should contain other field than 'PNG')
-    if annotations:
-        medium = annotations[0].id_medium
-        data = annotations[0].data
-        data.PNG = png
+                    logger.debug(
+                        'mugshot - medium: {medium:s} - {name:s}'.format(
+                            medium=medium, name=person_name))
 
-    # if not, create it from scratch
-    # (this should never happen)
-    else:
-        data = {'PNG': png}
-        # medium = random
+                    # extract base64 PNG dump
+                    _, stream = cv2.imencode('.png', mugshot)
+                    png = b64encode(stream)
 
-    # create new annotation (don't update as it might lead
-    # to very heavy history)
-    _ = robot.createAnnotation(mugshotLayer, medium=medium,
-                               fragment=person_name, data=data,
-                               returns_id=True)
+                    # get existing annotations for this person
+                    # (there should be at most one)
+                    annotations = robot.getAnnotations(layer=mugshotLayer,
+                                                       fragment=person_name)
 
-    # delete old annotation(s)
-    for annotation in annotations:
-        robot.deleteAnnotation(annotation._id)
+                    # if there is one, get its data content and update
+                    # 'png' field (it might contain other fields than 'png')
+                    if annotations:
+                        data = annotations[0].data
+                        data.png = png
+
+                    # if not, create it from scratch
+                    else:
+                        data = {'png': png}
+
+                    # create new annotation (don't update as it might lead
+                    # to very heavy history)
+                    _ = robot.createAnnotation(mugshotLayer, medium=medium,
+                                               fragment=person_name, data=data,
+                                               returns_id=True)
+
+                    # delete old annotation(s)
+                    for annotation in annotations:
+                        robot.deleteAnnotation(annotation._id)
+
+                # maintain the set of all mugshots as a list of numpy array
+                pngs.setdefault(person_name, []).append(mugshot)
+
+    # build wide png for css-animated mugshots for each person
+    for person_name, mugshots in pngs.iteritems():
+
+        logger.info('mugshots - {name:s}'.format(
+            name=person_name))
+
+        # randomly select at most --multiple mugshots and concatenate them
+        mugshot = np.hstack(
+            random.sample(mugshots, min(multiple, len(mugshots))))
+
+        # build one wide png out of those multiple mugshots
+        _, stream = cv2.imencode('.png', mugshot)
+        png = b64encode(stream)
+
+        # get existing annotations for this person
+        # (there should be at most one)
+        annotations = robot.getAnnotations(layer=mugshotLayer,
+                                           fragment=person_name)
+
+        # if there is one, get its data content and update 'PNG' field
+        # (it should contain other field than 'PNG')
+        if annotations:
+            medium = annotations[0].id_medium
+            data = annotations[0].data
+            data.PNG = png
+
+        # if not, create it from scratch
+        # (this should never happen)
+        else:
+            data = {'PNG': png}
+            # medium = random
+
+        # create new annotation (don't update as it might lead
+        # to very heavy history)
+        _ = robot.createAnnotation(mugshotLayer, medium=medium,
+                                   fragment=person_name, data=data,
+                                   returns_id=True)
+
+        # delete old annotation(s)
+        for annotation in annotations:
+            robot.deleteAnnotation(annotation._id)
+
+    logger.info('waiting for {period:d} seconds'.format(period=period))
+    time.sleep(period)
