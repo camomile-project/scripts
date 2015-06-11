@@ -41,18 +41,27 @@ Options:
   --url=URL                Submission server URL
                            [default: http://api.mediaeval.niderb.fr]
   --password=P45sw0Rd      Password
+  --period=N               Query evidence queue every N sec [default: 600].
+  --log=DIR                Path to log directory.
 
 """
 
-from common import RobotCamomile
+from common import RobotCamomile, create_logger
 from docopt import docopt
 
 arguments = docopt(__doc__, version='0.1')
 
 url = arguments['--url']
 password = arguments['--password']
+period = int(arguments['--period'])
 
-robot = RobotCamomile(url, 'robot_evidence', password=password)
+debug = arguments['--debug']
+log = arguments['--log']
+logger = create_logger('robot_evidence_out', path=log, debug=debug)
+
+robot = RobotCamomile(
+    url, 'robot_evidence', password=password,
+    period=period, logger=logger)
 
 # filled by evidence annotation front-end
 evidenceOutQueue = robot.getQueueByName(
@@ -122,7 +131,9 @@ for item in robot.dequeue_loop(evidenceOutQueue):
                                                  if is_evidence
                                                  else False)
 
-        print "new evidence - {name:s}".format(name=person_name)
+        logger.info(
+            "new evidence - {name:s} - {source:s}".format(
+                name=person_name, source=source))
 
     # propagate this evidence to the corresponding submission mapping
     # if the submission copy still exists...

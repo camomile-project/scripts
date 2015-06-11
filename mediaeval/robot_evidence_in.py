@@ -41,18 +41,27 @@ Options:
   --url=URL                Submission server URL
                            [default: http://api.mediaeval.niderb.fr]
   --password=P45sw0Rd      Password
+  --period=N               Query submission queue every N sec [default: 600].
+  --log=DIR                Path to log directory.
 
 """
 
-from common import RobotCamomile
+from common import RobotCamomile, create_logger
 from docopt import docopt
 
 arguments = docopt(__doc__, version='0.1')
 
 url = arguments['--url']
 password = arguments['--password']
+period = int(arguments['--period'])
 
-robot = RobotCamomile(url, 'robot_evidence', password=password)
+debug = arguments['--debug']
+log = arguments['--log']
+logger = create_logger('robot_evidence_in', path=log, debug=debug)
+
+robot = RobotCamomile(
+    url, 'robot_evidence', password=password,
+    period=period, logger=logger)
 
 # filled by robot_submission
 # {evidence: id_evidence, label: id_label}
@@ -107,6 +116,10 @@ for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
             # if this hypothesized evidence has been checked already
             if (id_shot, person_name, source) in mapping:
 
+                logger.debug(
+                    "existing evidence - {name:s} - {source:s}".format(
+                        name=person_name, source=source))
+
                 # propagate this evidence to this submission mapping
                 # if the submission copy still exists...
                 # (it might have been deleted by hands to free some space)
@@ -141,4 +154,6 @@ for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
 
                 robot.enqueue(evidenceInQueue, item)
 
-                print "new evidence - {name:s}".format(name=person_name)
+                logger.info(
+                    "new evidence - {name:s} - {source:s}".format(
+                        name=person_name, source=source))
