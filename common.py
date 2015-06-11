@@ -192,6 +192,11 @@ class RobotCamomile(Camomile):
             for annotation in annotations:
                 self.deleteAnnotation(annotation)
 
+    def emptyQueueByName(self, name):
+        queue = self.getQueueByName(name)
+        self.updateQueue(queue, elements=[])
+
+
 
 class HTMLTime(object):
     """
