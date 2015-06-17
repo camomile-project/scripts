@@ -65,6 +65,7 @@ robot = RobotCamomile(
 
 submissionQueue = robot.getQueueByName('mediaeval.submission.in')
 robot_evidence = robot.getUserByName('robot_evidence')
+robot_label = robot.getUserByName('robot_label')
 evidenceSubmissionQueue = robot.getQueueByName(
     'mediaeval.submission.evidence.in')
 
@@ -112,6 +113,9 @@ for item in robot.dequeue_loop(submissionQueue):
 
     # give READ permission to robot_evidence
     robot.setLayerPermissions(evidence._id, robot.READ, user=robot_evidence)
+
+    # give READ permission to robot_label
+    robot.setLayerPermissions(evidence._id, robot.READ, user=robot_label)
 
     # give ADMIN permission to robot_evidence
     # (allowing to later update the mapping)
