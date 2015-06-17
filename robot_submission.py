@@ -115,7 +115,7 @@ for item in robot.dequeue_loop(submissionQueue):
     robot.setLayerPermissions(evidence._id, robot.READ, user=robot_evidence)
 
     # give READ permission to robot_label
-    robot.setLayerPermissions(evidence._id, robot.READ, user=robot_label)
+    robot.setLayerPermissions(label._id, robot.READ, user=robot_label)
 
     # give ADMIN permission to robot_evidence
     # (allowing to later update the mapping)
