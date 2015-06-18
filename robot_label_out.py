@@ -72,37 +72,37 @@ labelUnknownLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.unkn
 # id of the in coming queue
 OutGoingQueue = robot.getQueueByName('mediaeval.submission.label.out')
 
+for item in robot.dequeue_loop(OutGoingQueue):
 
-while True:
+    # front-end input
+    id_shot = item.input.id_shot
+    hypothesis = item.input.hypothesis
+    others = item.input.others
 
-    for item in robot.dequeue_loop(OutGoingQueue):
+    # if there is an unknown speaking face in the shot create an annotation of this shot in the labelUnknownLayer
+    if item.output.unknown:
+        robot.createAnnotation(labelUnknownLayer, fragment=id_shot, data=hypothesis+others)
+        continue
 
-        # front-end input
-        id_shot = item.input.id_shot
-        id_medium = item.input.id_medium
-        hypothesis = item.input.hypothesis
-        others = item.input.others
+    known = item.output.known
 
-        # if there is an unknown speaking face in the shot create an annotation of this shot in the labelUnknownLayer
-        if item.output.unknown == "yes":
-            robot.createAnnotation(labelUnknownLayer, fragment=id_shot, data=hypothesis+others)
-            continue
+    # find if there is two identical annotations 
+    identical = False
 
-        known = item.output.known
+    l_labelCompleteGroudtruth = robot.getAnnotations(layer = labelCompleteGroudtruthLayer, fragment = id_shot)
 
-        # find if there is two identical annotations 
-        identical = False
-        for labelAgragatedGroudtruth in robot.getAnnotations(layer = labelAgragatedGroudtruthLayer, fragment = id_shot):
-            if set(known.keys()) == set(labelAgragatedGroudtruth.keys()):
+    if len(l_labelCompleteGroudtruth) >= 2:
+
+        for labelCompleteGroudtruth in l_labelCompleteGroudtruth:
+            if set(known.keys()) == set(labelCompleteGroudtruth.keys()):
                 identical = True
                 for p in known:
-                    if known[p] != labelAgragatedGroudtruth[p]:
+                    if known[p] != labelCompleteGroudtruth[p] or known[p] == "dontKnow":
                         identical = False
                         break
                 if identical: 
-                    robot.createAnnotation(labelCompleteGroudtruthLayer, fragment=id_shot, data=known)
+                    robot.createAnnotation(labelFinalGroudtruthLayer, fragment=id_shot, data=known)
                     break
 
-        robot.createAnnotation(labelAgragatedGroudtruthLayer, fragment=id_shot, data=known)
+    robot.createAnnotation(labelCompleteGroudtruthLayerLayer, fragment=id_shot, data=known)
 
-    sleep(period)
