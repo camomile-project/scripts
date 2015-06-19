@@ -42,7 +42,7 @@ Options:
                            [default: http://api.mediaeval.niderb.fr]
   --password=P45sw0Rd      Password
   --period=N               Query submission queue every N sec [default: 600].
-  --sizeQueue=N            Size of the queue [default: 400].
+  --limit=N                Size of the queue [default: 400].
   --log=DIR                Path to log directory.
 
 """
@@ -70,7 +70,7 @@ arguments = docopt(__doc__, version='0.1')
 url = arguments['--url']
 password = arguments['--password']
 period = int(arguments['--period'])
-sizeQueue = int(arguments['--sizeQueue'])
+limit = int(arguments['--limit'])
 
 debug = arguments['--debug']
 log = arguments['--log']
@@ -163,7 +163,7 @@ for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
                 item['end'] = segment.end + (5 if source == 'audio'
                                              else 0)
 
-                robot.enqueue_fair(evidenceInQueue, item, limit=sizeQueue)
+                robot.enqueue_fair(evidenceInQueue, item, limit=limit)
 
                 logger.info(
                     "new evidence - {name:s} - {source:s}".format(
