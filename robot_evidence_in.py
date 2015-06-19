@@ -49,7 +49,6 @@ Options:
 
 from common import RobotCamomile, create_logger
 from docopt import docopt
-from datetime import datetime
 
 arguments = docopt(__doc__, version='0.1')
 
