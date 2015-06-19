@@ -74,8 +74,9 @@ class RobotCamomile(Camomile):
         self.logger = logger
 
         # (not-so) smart queue length monitoring
-        # @ --> date of last pickLength
-        # n --> esimtated current value of pickLength
+        # dict queueId:
+        # @ --> date of last pickLength()
+        # n --> esimated pickLength()
         self.cache = {}
 
     def getUserByName(self, name):
@@ -157,7 +158,8 @@ class RobotCamomile(Camomile):
         timeout = self.period
 
         if ((queue not in self.cache) or
-            (datetime.now() - self.cache[queue]['@']).total_seconds() > timeout):
+                (datetime.now() - self.cache[queue]['@'])
+                .total_seconds() > timeout):
             self.cache[queue]['n'] = self.pickLength(queue)
             self.cache[queue]['@'] = datetime.now()
 
@@ -169,7 +171,6 @@ class RobotCamomile(Camomile):
 
         self.enqueue(queue, item)
         self.cache[queue]['n'] += 1
-
 
     def duplicate_layer(self, layer, returns_id=False):
 
@@ -220,7 +221,6 @@ class RobotCamomile(Camomile):
     def emptyQueueByName(self, name):
         queue = self.getQueueByName(name)
         self.updateQueue(queue, elements=[])
-
 
 
 class HTMLTime(object):
