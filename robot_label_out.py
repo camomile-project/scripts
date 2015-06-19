@@ -48,6 +48,7 @@ Options:
 from common import RobotCamomile, create_logger
 from docopt import docopt
 from time import sleep
+from collections import Counter
 
 arguments = docopt(__doc__, version='0.1')
 
@@ -76,33 +77,46 @@ for item in robot.dequeue_loop(OutGoingQueue):
 
     # front-end input
     id_shot = item.input.id_shot
-    hypothesis = item.input.hypothesis
-    others = item.input.others
 
-    # if there is an unknown speaking face in the shot create an annotation of this shot in the labelUnknownLayer
-    if item.output.unknown:
-        robot.createAnnotation(labelUnknownLayer, fragment=id_shot, data=hypothesis+others)
+    # add annotation to labelCompleteGroudtruthLayerLayer
+    robot.createAnnotation(labelCompleteGroudtruthLayerLayer, fragment=id_shot, data={"known":item.output.known, "annotator":item.log.user})
+
+    labelsCompleteGroudtruth = robot.getAnnotations(layer = labelCompleteGroudtruthLayer, fragment = id_shot)
+
+    # if there is lesss than 2 annotations for this shot, go to the net shot
+    if len(labelsCompleteGroudtruth) < 2:
+        logger.info("less than 2 annotations for {shot:s}".format(shot=id_shot))        
         continue
 
-    known = item.output.known
+    # else find if there is a consensus between annotator
+    # list all annotated status for each hypothesis person of each annotation
+    d = {}
+    for labelCompleteGroudtruth in labelsCompleteGroudtruth:
+        for p in labelCompleteGroudtruth.known:
+            d.setdefault(p, []).append(labelCompleteGroudtruth.known[p])
 
-    # find if there is two identical annotations 
-    identical = False
+    # if shot is already in labelFinalGroudtruthLayer: skip the aggragation
+    if robot.getAnnotations(layer = labelFinalGroudtruthLayer, fragment = id_shot) != []:
+        logger.info("{shot:s} is already in mediaeval.groundtruth.label.agragated".format(shot=id_shot))        
+        continue
 
-    l_labelCompleteGroudtruth = robot.getAnnotations(layer = labelCompleteGroudtruthLayer, fragment = id_shot)
+    # check if the best status of each hypothesis person :
+    #  - is different than dontKown
+    #  - have at least 2 annotations for this status
+    #  - there is a majority of this status
+    aggregated = {}
+    for p in d:
+        state, nb = Counter(d[p]).most_common(1)
 
-    if len(l_labelCompleteGroudtruth) >= 2:
+        if state == 'dontKnow' or nb < 2 or float(nb)/float(len(d[p])) < 0.5:
+            aggregated = False
+            break
+        else:
+            aggregated[p] = state
 
-        for labelCompleteGroudtruth in l_labelCompleteGroudtruth:
-            if set(known.keys()) == set(labelCompleteGroudtruth.keys()):
-                identical = True
-                for p in known:
-                    if known[p] != labelCompleteGroudtruth[p] or known[p] == "dontKnow":
-                        identical = False
-                        break
-                if identical: 
-                    robot.createAnnotation(labelFinalGroudtruthLayer, fragment=id_shot, data=known)
-                    break
+    # if there is a consensus for this shot, add an annotation with the consensus to labelFinalGroudtruthLayer
+    if aggregated: 
+        robot.createAnnotation(labelFinalGroudtruthLayer, fragment=id_shot, data=aggregated)
+        logger.info("add {shot:s} to mediaeval.groundtruth.label.agragated".format(shot=id_shot))  
 
-    robot.createAnnotation(labelCompleteGroudtruthLayerLayer, fragment=id_shot, data=known)
 
