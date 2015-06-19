@@ -123,16 +123,13 @@ for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
                 # propagate this evidence to this submission mapping
                 # if the submission copy still exists...
                 # (it might have been deleted by hands to free some space)
-                try:
-                    description = robot.getLayer(id_submission).description
-                    # (initialize empty mapping if needed)
-                    _ = description.setdefault('mapping', {})
-                    description.mapping[person_name] = mapping[id_shot,
-                                                               person_name,
-                                                               source]
-                    robot.updateLayer(id_submission, description=description)
-                except Exception:
-                    pass
+                description = robot.getLayer(id_submission).description
+                # (initialize empty mapping if needed)
+                _ = description.setdefault('mapping', {})
+                description.mapping[person_name] = mapping[id_shot,
+                                                           person_name,
+                                                           source]
+                robot.updateLayer(id_submission, description=description)
 
             # if this hypothesized evidence has not been checked yet
             # push to evidence annotation frontend
