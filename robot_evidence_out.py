@@ -136,15 +136,10 @@ for item in robot.dequeue_loop(evidenceOutQueue):
                 name=person_name, source=source))
 
     # propagate this evidence to the corresponding submission mapping
-    # if the submission copy still exists...
-    # (it might have been deleted by hands to free some space)
-    try:
-        description = robot.getLayer(id_submission).description
-        # (initialize empty mapping if needed)
-        _ = description.setdefault('mapping', {})
-        description.mapping[person_name] = mapping[id_shot,
-                                                   person_name,
-                                                   source]
-        robot.updateLayer(id_submission, description=description)
-    except Exception:
-        pass
+    description = robot.getLayer(id_submission).description
+    # (initialize empty mapping if needed)
+    _ = description.setdefault('mapping', {})
+    description.mapping[person_name] = mapping[id_shot,
+                                               person_name,
+                                               source]
+    robot.updateLayer(id_submission, description=description)
