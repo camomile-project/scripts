@@ -85,6 +85,7 @@ for item in robot.dequeue_loop(OutGoingQueue):
 
     # if there is lesss than 2 annotations for this shot, go to the net shot
     if len(labelsCompleteGroudtruth) < 2:
+        logger.info("less than 2 annotations for {shot:s}".format(shot=id_shot))        
         continue
 
     # else find if there is a consensus between annotator
@@ -96,6 +97,7 @@ for item in robot.dequeue_loop(OutGoingQueue):
 
     # if shot is already in labelFinalGroudtruthLayer: skip the aggragation
     if robot.getAnnotations(layer = labelFinalGroudtruthLayer, fragment = id_shot) != []:
+        logger.info("{shot:s} is already in mediaeval.groundtruth.label.agragated".format(shot=id_shot))        
         continue
 
     # check if the best status of each hypothesis person :
@@ -115,5 +117,6 @@ for item in robot.dequeue_loop(OutGoingQueue):
     # if there is a consensus for this shot, add an annotation with the consensus to labelFinalGroudtruthLayer
     if aggregated: 
         robot.createAnnotation(labelFinalGroudtruthLayer, fragment=id_shot, data=aggregated)
+        logger.info("add {shot:s} to mediaeval.groundtruth.label.agragated".format(shot=id_shot))  
 
 
