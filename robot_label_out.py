@@ -77,13 +77,6 @@ for item in robot.dequeue_loop(OutGoingQueue):
 
     # front-end input
     id_shot = item.input.id_shot
-    hypothesis = item.input.hypothesis
-    others = item.input.others
-
-    # if there is an unknown speaking face in the shot create an annotation of this shot in the labelUnknownLayer
-    if item.output.unknown:
-        robot.createAnnotation(labelUnknownLayer, fragment=id_shot, data=hypothesis+others)
-        continue
 
     # add annotation to labelCompleteGroudtruthLayerLayer
     robot.createAnnotation(labelCompleteGroudtruthLayerLayer, fragment=id_shot, data={"known":item.output.known, "annotator":item.log.user})
