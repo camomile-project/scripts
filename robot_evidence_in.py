@@ -51,20 +51,6 @@ from common import RobotCamomile, create_logger
 from docopt import docopt
 from datetime import datetime
 
-
-def get_mapping(evidenceGroundtruthLayer):
-    mapping = {}
-    for _, evidences in robot.getAnnotations_iter(evidenceGroundtruthLayer):
-        for evidence in evidences:
-            id_shot = evidence.fragment
-            person_name = evidence.data.person_name
-            source = evidence.data.source
-            to = (evidence.data.corrected_person_name
-                  if evidence.data.is_evidence
-                  else False)
-            mapping[id_shot, person_name, source] = to
-    return mapping
-
 arguments = docopt(__doc__, version='0.1')
 
 url = arguments['--url']
@@ -97,9 +83,6 @@ evidenceGroundtruthLayer = robot.getLayerByName(
 # layer containing submission shots
 submissionShotLayer = robot.getLayerByName(test, 'mediaeval.submission_shot')
 
-# get current time
-t = datetime.now() 
-
 # forever loop on evidence submission queue
 for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
 
@@ -111,7 +94,16 @@ for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
     # keep track of (already done) manual annotations
     # {id_shot, person_name, source: corrected_person_name}
     # {id_shot, person_name, source: False} (if not an evidence)
-    mapping = get_mapping(evidenceGroundtruthLayer)
+    mapping = {}
+    for _, evidences in robot.getAnnotations_iter(evidenceGroundtruthLayer):
+        for evidence in evidences:
+            id_shot = evidence.fragment
+            person_name = evidence.data.person_name
+            source = evidence.data.source
+            to = (evidence.data.corrected_person_name
+                  if evidence.data.is_evidence
+                  else False)
+            mapping[id_shot, person_name, source] = to
 
     # process evidence layer medium by medium
     for id_medium, evidences in robot.getAnnotations_iter(
@@ -168,10 +160,3 @@ for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
                 logger.info(
                     "new evidence - {name:s} - {source:s}".format(
                         name=person_name, source=source))
-
-        if (datetime.now() - t).total_seconds() < period:                
-
-            mapping = get_mapping(evidenceGroundtruthLayer)
-            
-            # get current time
-            t = datetime.now() 
