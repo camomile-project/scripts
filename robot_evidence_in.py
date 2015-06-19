@@ -77,9 +77,6 @@ test = robot.getCorpusByName('mediaeval.test')
 evidenceGroundtruthLayer = robot.getLayerByName(
     test, 'mediaeval.groundtruth.evidence.all')
 
-# layer containing submission shots
-submissionShotLayer = robot.getLayerByName(test, 'mediaeval.submission_shot')
-
 # forever loop on evidence submission queue
 for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
 
