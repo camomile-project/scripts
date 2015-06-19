@@ -64,6 +64,7 @@ robot = RobotCamomile(
     period=period, logger=logger)
 
 submissionQueue = robot.getQueueByName('mediaeval.submission.in')
+testCorpus = robot.getCorpusByName('mediaeval.test')
 robot_evidence = robot.getUserByName('robot_evidence')
 robot_label = robot.getUserByName('robot_label')
 evidenceSubmissionQueue = robot.getQueueByName(
@@ -81,6 +82,35 @@ for item in robot.dequeue_loop(submissionQueue):
             "del - {team:s}.{user:s} - {evidence:s}.{label:s}".format(
                 team=item.team, user=item.user,
                 evidence=id_evidence, label=id_label))
+
+        # look for the (label|evidence) copy of this submission
+        # and mark them as deleted
+        for labelLayer in robot.getLayers(
+                testCorpus, data_type="mediaeval.persondiscovery.label"):
+
+            # if this is not a copy or not the copy we are looking for, skip
+            description = labelLayer.description
+            if description.get('copy', None) != id_label:
+                continue
+
+            # if we reached this point, it means that we found the copy
+
+            # mark label layer copy as deleted
+            description['deleted'] = item
+            del description['copy']
+            robot.updateLayer(labelLayer._id, description=description)
+
+            # mark evidence layer copy as deleted
+            evidenceLayer = robot.getLayer(description.id_evidence)
+            description = evidenceLayer.description
+            description['deleted'] = item
+            del description['copy']
+            robot.updateLayer(evidenceLayer._id, description=description)
+
+            # no need to keep looking for the copy of the submission
+            break
+
+        # back to the top of the loop
         continue
 
     logger.info(
@@ -92,14 +122,14 @@ for item in robot.dequeue_loop(submissionQueue):
     try:
         # in a try/except scope because it might have been deleted by now
         evidence = robot.duplicate_layer(id_evidence, returns_id=False)
-    except Exception, e:
+    except Exception:
         continue
 
     # duplicate label layer
     try:
         # in a try/except scope because it might have been deleted by now
         label = robot.duplicate_layer(id_label, returns_id=False)
-    except Exception, e:
+    except Exception:
         robot.deleteLayer(evidence._id)
         continue
 
