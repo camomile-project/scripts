@@ -143,13 +143,12 @@ while True :
     # update layerTeam
     for team in teamList:
         description = []
-        rank = 1
         for s, t, n in sorted(rankPrimary + rankConstrastiveteam[team], reverse = True)
+            item {"rank":len(description)+1, "score":'?', "run":'?'}
             if t == team:
-                description.append([rank, s, n])
-            else:
-                description.append([rank, '?', '?'])
-            rank +=1
+                item['score'] = s
+                item['run'] = n
+            description.append(item)
         robot.updateLayer(id_LayerLeaderboardTeam[team], description=description)
 
     sleep(period)
