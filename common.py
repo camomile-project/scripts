@@ -29,6 +29,7 @@
 from camomile import Camomile
 from getpass import getpass
 import time
+from datetime import datetime
 
 import numpy as np
 from sklearn.isotonic import IsotonicRegression
@@ -71,6 +72,11 @@ class RobotCamomile(Camomile):
         if logger is None:
             logger = NullHandler()
         self.logger = logger
+
+        # (not-so) smart queue length monitoring
+        # @ --> date of last pickLength
+        # n --> esimtated current value of pickLength
+        self.cache = {}
 
     def getUserByName(self, name):
 
@@ -145,6 +151,25 @@ class RobotCamomile(Camomile):
                 self.logger.debug(
                     'empty queue (waiting for %ds)' % self.period)
                 time.sleep(self.period)
+
+    def enqueue_fair(self, queue, item, limit=np.inf):
+
+        timeout = self.period
+
+        if ((queue not in self.cache) or
+            (datetime.now() - self.cache[queue]['@']).total_seconds() > timeout):
+            self.cache[queue]['n'] = self.pickLength(queue)
+            self.cache[queue]['@'] = datetime.now()
+
+        # wait until the queue has been popped
+        while self.cache[queue]['n'] > limit:
+            time.sleep(timeout)
+            self.cache[queue]['n'] = self.pickLength(queue)
+            self.cache[queue]['@'] = datetime.now()
+
+        self.enqueue(queue, item)
+        self.cache[queue]['n'] += 1
+
 
     def duplicate_layer(self, layer, returns_id=False):
 
