@@ -120,8 +120,6 @@ for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
                         name=person_name, source=source))
 
                 # propagate this evidence to this submission mapping
-                # if the submission copy still exists...
-                # (it might have been deleted by hands to free some space)
                 description = robot.getLayer(id_submission).description
                 # (initialize empty mapping if needed)
                 _ = description.setdefault('mapping', {})
