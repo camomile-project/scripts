@@ -160,11 +160,14 @@ class RobotCamomile(Camomile):
         if ((queue not in self.cache) or
                 (datetime.now() - self.cache[queue]['@'])
                 .total_seconds() > timeout):
+            self.cache[queue] = {}
             self.cache[queue]['n'] = self.pickLength(queue)
             self.cache[queue]['@'] = datetime.now()
 
         # wait until the queue has been popped
         while self.cache[queue]['n'] > limit:
+            self.logger.debug(
+                'full queue (waiting for %ds)' % self.period)
             time.sleep(timeout)
             self.cache[queue]['n'] = self.pickLength(queue)
             self.cache[queue]['@'] = datetime.now()
