@@ -148,6 +148,7 @@ for item in robot.dequeue_loop(labelOutQueue):
                 shot=shot, n=nAnnotators))
         continue
 
+    consensus = {}
     for personName in personNames:
 
         counts = df[personName].value_counts()
@@ -180,7 +181,7 @@ for item in robot.dequeue_loop(labelOutQueue):
             consensus = {}
             logger.debug(
                 "no consensus for shot {s} - "
-                "most frequent state for {p} only has {n} votes".format(
+                "most frequent state for {p} only has {n} vote(s)".format(
                     s=shot, p=personName, n=count))
             break
 
@@ -193,10 +194,10 @@ for item in robot.dequeue_loop(labelOutQueue):
             consensus = {}
             logger.debug(
                 "no consensus for shot {s} - "
-                "most frequent state for {p} does not have majority (r:d)only has {n} votes".format(
-                    s=shot, p=personName, n=count))
+                "most frequent state for {p} does not "
+                "have majority ({r:d}%)".format(
+                    s=shot, p=personName, r=100 * ratio))
             break
-
 
     # found consensus
     if consensus:

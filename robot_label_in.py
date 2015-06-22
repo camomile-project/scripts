@@ -210,7 +210,7 @@ def update(shots):
         skip = False
 
         for annotation in robot.getAnnotations(layer=allLayer, fragment=shot):
-            hypothesis.update(set(annotation.data.annotation.keys()))
+            hypothesis.update(set(annotation.data.known.keys()))
 
         # find shot in all submissions
         for layer, mapping in layerMapping.iteritems():
@@ -255,6 +255,8 @@ def update(shots):
 
         if not skip:
             hypotheses[shot] = hypothesis
+
+    logger.info('refresh - gathering alternative hypotheses')
 
     for shot in hypotheses:
 
@@ -304,8 +306,8 @@ while True:
         item = {}
         item['id_shot'] = shot
         item['id_medium'] = submissionShots[shot]['id_medium']
-        item['start'] = submissionShots[shot]['start']
-        item['end'] = submissionShots[shot]['end']
+        item['start'] = submissionShots[shot]['start'] + 0.5
+        item['end'] = submissionShots[shot]['end'] - 0.5
         item['hypothesis'] = list(hypothesis)
         item['others'] = list(ANCHORS) + list(others[shot])
         item['annotated_by'] = list(annotators)
