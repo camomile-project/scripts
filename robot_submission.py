@@ -67,8 +67,6 @@ submissionQueue = robot.getQueueByName('mediaeval.submission.in')
 testCorpus = robot.getCorpusByName('mediaeval.test')
 robot_evidence = robot.getUserByName('robot_evidence')
 robot_label = robot.getUserByName('robot_label')
-evidenceSubmissionQueue = robot.getQueueByName(
-    'mediaeval.submission.evidence.in')
 
 # forever loop on submission queue
 for item in robot.dequeue_loop(submissionQueue):
@@ -150,7 +148,3 @@ for item in robot.dequeue_loop(submissionQueue):
     # give ADMIN permission to robot_evidence
     # (allowing to later update the mapping)
     robot.setLayerPermissions(label._id, robot.ADMIN, user=robot_evidence)
-
-    # enqueue evidence and label layers
-    robot.enqueue(evidenceSubmissionQueue, {'evidence': evidence._id,
-                                            'label': label._id})
