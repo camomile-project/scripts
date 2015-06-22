@@ -32,7 +32,7 @@
 MediaEval submission robot
 
 Usage:
-  robot_submission <videosList> <teamList> [options]
+  robot_submission <videos.lst> [options]
 
 Options:
   -h --help                  Show this screen.
@@ -43,18 +43,21 @@ Options:
   --password=P45sw0Rd        Password
   --period=N                 Query evidence queue every N sec [default: 6000].
   --log=DIR                  Path to log directory.
-  --levenshtein=<threshold>  Levenshtein ratio threshold [default: 0.95]  
+  --levenshtein=<threshold>  Levenshtein ratio threshold [default: 0.95]
 """
 
 from common import RobotCamomile, create_logger
 from docopt import docopt
 from time import sleep
 from Levenshtein import ratio
+from datetime import datetime
+import numpy as np
 
-def computeAveragePrecision(vReturned, vRelevant):
 
-    nReturned = len(vReturned)
-    nRelevant = len(vRelevant)
+def computeAveragePrecision(returned, relevant):
+
+    nReturned = len(returned)
+    nRelevant = len(relevant)
 
     if nRelevant == 0 and nReturned == 0:
         return 1.
@@ -65,10 +68,36 @@ def computeAveragePrecision(vReturned, vRelevant):
     if nReturned == 0 and nRelevant > 0:
         return 0.
 
-    returnedIsRelevant = np.array([item in vRelevant for item in vReturned])
+    returnedIsRelevant = np.array([item in relevant for item in returned])
     precision = np.cumsum(returnedIsRelevant) / (1. + np.arange(nReturned))
     return np.sum(precision * returnedIsRelevant) / min(nReturned, nRelevant)
 
+
+def computeMeanAveragePrecision(robot, layer, media, shots, qRelevant):
+
+    # load submission
+    qReturned = []
+    for medium in media:
+        for annotation in robot.getAnnotations(layer=layer, medium=medium):
+            if annotation.fragment not in shots:
+                continue
+            personName = annotation.data.person_name
+            confidence = annotation.data.confidence
+            qReturned.append((shot, personName, confidence))
+
+    # sort submitted shot in decreasing confidence order
+    qReturned = sorted(qReturned, key=lambda s: s[2], reverse=True)
+
+    # per query average precision
+    qAveragePrecision = {}
+    for query, relevant in qRelevant.iteritems():
+        # filter shots by Levenshtein distance to query
+        returned = [s for s, p, _ in qReturned if ratio(query, p) > 0.95]
+        # average precision for this query
+        qAveragePrecision[query] = computeAveragePrecision(returned, relevant)
+
+    # mean average precision
+    return np.mean(qAveragePrecision.values())
 
 
 arguments = docopt(__doc__, version='0.1')
@@ -79,78 +108,131 @@ period = int(arguments['--period'])
 debug = arguments['--debug']
 log = arguments['--log']
 threshold = float(arguments['--levenshtein'])
+videos = arguments['<videos.lst>']
 
 logger = create_logger('robot_leaderboard', path=log, debug=debug)
-robot = RobotCamomile(url, 'robot_leaderboard', password=password, period=period, logger=logger)
+robot = RobotCamomile(
+    url, 'robot_leaderboard', password=password, period=period, logger=logger)
 
-# corpus id
+# test corpus
 test = robot.getCorpusByName('mediaeval.test')
 
-# layer containing complete annotations for label grondtruth
-labelAggregatedGroudtruthLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.aggregated')
-# unique layer containing manual annotations
-evidenceGroundtruthLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.evidence.all')
+# consensus layer
+refLayer = robot.getLayerByName(
+    test, 'mediaeval.groundtruth.label.consensus')
 
-# list of team
-teamList = [team for team in open(arguments['<teamList>']).read().splitlines()]
+# evidence layer
+evirefLayer = robot.getLayerByName(
+    test, 'mediaeval.groundtruth.evidence.all')
 
-# list of video to be evaluated
-videos = [video for video in open(arguments['<videosList>']).read().splitlines()]
-mediaIds = set([media['_id'] for media in robot.getMedia(test) if media['name'] in videos])
+# teams
+teams = {team._id: team.name
+         for team in robot.getGroups()
+         if team.name.startswith('team_')}
 
-# team name to id_layer_leaderboard
-id_LayerLeaderboardTeam = {l.description.team : l._id for l in robot.getLayers(test) if  l.data_type = "leaderboard"}
+# leaderboard subset
+media = {medium.name: medium._id for medium in robot.getMedia(test)}
+with open(videos, 'r') as f:
+    videos = [v.strip() for v in f]
+media = [media[v] for v in videos if v in media]
 
-while True :
-    # update groundtruth
+# create one leaderboard layer per team (if it does not exist)
+leaderboard = {}
+for team, team_name in teams.iteritems():
+    name = 'leaderboard ({team})'.format(team=team_name)
+    try:
+        leaderboard[team] = robot.getLayerByName(test, name)
+    except Exception, e:
+        leaderboard[team] = robot.createLayer(
+            test, name,
+            fragment_type='', data_type=None,
+            returns_id=True)
+        robot.setLayerPermissions(leaderboard[team], robot.READ, group=team)
 
-    # list of queries for the evaluation
-    queries = set([a.data.corrected_person_name for a in robot.getAnnotations(layer = evidenceGroundtruthLayer) if '_' in a.data.corrected_person_name])
 
-    # get list of id_layer hypothesis per team
-    submissionTeam = {team:[] for team in teamList}
-    for l in robot.getLayers(test, data_type = 'mediaeval.persondiscovery.label'):
-        submissionTeam[l.description.team].append(l._id)
+while True:
 
-    # update groundtruth
-    relevant = {query:set([]) for query in queries }
-    for a in robot.getAnnotations(layer = labelAggregatedGroudtruthLayer): 
-        for query, status in a.aggregated.items():
-            if status == "speakingFace":
-                relevant[query].add(a.fragment)
+    qRelevant = {}
+    shots = set([])
 
-    # Compute MAP
-    rankPrimary = []
-    rankConstrastiveTeam = {}
-    for team in teamList:
-        # for each layer hypothesis of the current team
-        rankConstrastiveTeam[team] = []
-        for submissionLayer in submissionTeam[team]:
+    for medium in media:
+        for annotation in robot.getAnnotations(refLayer, medium=medium):
 
-            returned = {query:set([]) for query in queries}
-            for a in robot.getAnnotations(layer = submissionLayer, data): 
-                ratio, personName = max([[ratio(query, a.data), query], for query in queries])
-                if ratio > threshold:
-                    returned[personName].add(a.fragment)
+            shot = annotation.fragment
+            shots.add(shot)
 
-            averagePrecision = {query :computeAveragePrecision(returned[query], relevant[query]) for query in queries}
-            MAP = np.mean([averagePrecision[query] for query in queries])
-            if submissionLayer.name == 'primary':
-                rankPrimary.append([MAP, team, submissionLayer.name])
-            else:
-                rankConstrastiveteam[team].append([MAP, team, submissionLayer.name])
+            for personName, status in annotation.data.iteritems():
 
-    # update layerTeam
-    for team in teamList:
-        description = []
-        for s, t, n in sorted(rankPrimary + rankConstrastiveteam[team], reverse = True)
-            item {"rank":len(description)+1, "score":'?', "run":'?'}
+                # we are only looking for speaking-faces
+                if status != 'speakingFace':
+                    continue
+
+                # we are only looking for complete person names
+                if '_' not in personName:
+                    continue
+
+                # this shot is relevant for query 'personName'
+                qRelevant.setdefault(personName, set([])).add(shot)
+
+    nQueries = len(qRelevant)
+    nShots = len(shots)
+
+    meanAveragePrecision = {}
+
+    # evaluate every original submissions
+    for layer in robot.getLayers(
+            test, data_type='mediaeval.persondiscovery.label'):
+
+        # we are only looking for original submissions (not copies)
+        if 'copy' in layer.description:
+            continue
+
+        # which team ? which submission ?
+        team = layer.description.id_team
+        name = layer.name
+
+        logger.info(
+            "evaluating {team}'s {name}".format(team=teams[team], name=name))
+
+        # evaluate this submission and store MAP value
+        mAP = computeMeanAveragePrecision(
+            robot, layer._id, media, shots, qRelevant)
+
+        meanAveragePrecision.setdefault(team, {})[name] = mAP
+
+    # rank all submissions based on their MAP
+    ranking = set([])
+    for team, runs in meanAveragePrecision.iteritems():
+        for name, mAP in runs.iteritems():
+            ranking.add((team, name, mAP))
+    ranking = sorted(ranking, reverse=True, key=lambda s: s[2])
+
+    # "primary" leaderboard
+    primary = [(t, m) for t, n, m in ranking if n == 'primary']
+    for team, name in teams.iteritems():
+
+        privateRanking = []
+
+        for t, mAP in primary:
+
             if t == team:
-                item['score'] = s
-                item['run'] = n
-            description.append(item)
-        robot.updateLayer(id_LayerLeaderboardTeam[team], description=description)
+                privateName = name
+                privateMeanAveragePrecision = mAP
+            elif name == 'team_baseline':
+                privateName = 'baseline'
+                privateMeanAveragePrecision = mAP
+            else:
+                privateName = '---'
+                privateMeanAveragePrecision = '---'
+
+            privateRanking.append((privateName, privateMeanAveragePrecision))
+
+        description = {}
+        description['date'] = datetime.now().isoformat()
+        description['ranking'] = privateRanking
+        description['queries'] = nQueries
+        description['shots'] = nShots
+
+        robot.updateLayer(leaderboard[team], description=description)
 
     sleep(period)
-
-
