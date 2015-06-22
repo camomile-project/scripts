@@ -29,10 +29,10 @@
 # Hervé BREDIN -- http://herve.niderb.fr/
 
 """
-MediaEval submission robot
+MediaEval label out robot
 
 Usage:
-  robot_submission [options]
+  robot_label_out [options]
 
 Options:
   -h --help                Show this screen.
@@ -47,8 +47,7 @@ Options:
 
 from common import RobotCamomile, create_logger
 from docopt import docopt
-from time import sleep
-from collections import Counter
+from pandas import DataFrame
 
 arguments = docopt(__doc__, version='0.1')
 
@@ -58,65 +57,151 @@ period = int(arguments['--period'])
 
 debug = arguments['--debug']
 log = arguments['--log']
-logger = create_logger('robot_evidence_in', path=log, debug=debug)
-robot = RobotCamomile(url, 'robot_label', password=password, period=period, logger=logger)
+logger = create_logger('robot_label_out', path=log, debug=debug)
+robot = RobotCamomile(
+    url, 'robot_label', password=password,
+    period=period, logger=logger)
 
 # corpus id
 test = robot.getCorpusByName('mediaeval.test')
 
-# layer containing agragated annotations for label grondtruth
-labelAgragatedGroudtruthLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.agragated')
+# layer containing consensus annotations
+consensusLayer = robot.getLayerByName(
+    test, 'mediaeval.groundtruth.label.consensus')
+
+# layer containing shots with at least one annotated unknown
+unknownLayer = robot.getLayerByName(
+    test, 'mediaeval.groundtruth.label.unknown')
+
 # layer containing complete annotations for label grondtruth
-labelCompleteGroudtruthLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.complete')
-# layer containing shot with an unknown person
-labelUnknownLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.unknown')
+allLayer = robot.getLayerByName(
+    test, 'mediaeval.groundtruth.label.all')
+
 # id of the in coming queue
-OutGoingQueue = robot.getQueueByName('mediaeval.submission.label.out')
+labelOutQueue = robot.getQueueByName(
+    'mediaeval.label.out')
 
-for item in robot.dequeue_loop(OutGoingQueue):
+for item in robot.dequeue_loop(labelOutQueue):
 
-    # front-end input
-    id_shot = item.input.id_shot
+    # save raw annotation
 
-    # add annotation to labelCompleteGroudtruthLayerLayer
-    robot.createAnnotation(labelCompleteGroudtruthLayerLayer, fragment=id_shot, data={"known":item.output.known, "annotator":item.log.user})
+    shot = item.input.id_shot
+    medium = item.input.id_medium
+    known = item.output.known
+    unknown = item.output.unknown
+    annotator = item.log.user
 
-    labelsCompleteGroudtruth = robot.getAnnotations(layer = labelCompleteGroudtruthLayer, fragment = id_shot)
+    robot.createAnnotation(
+        allLayer,
+        medium=medium, fragment=shot,
+        data={"known": known,
+              "unknown": unknown,
+              "annotator": annotator})
 
-    # if there is lesss than 2 annotations for this shot, go to the net shot
-    if len(labelsCompleteGroudtruth) < 2:
-        logger.info("less than 2 annotations for {shot:s}".format(shot=id_shot))        
+    # check new consensus for this shot
+
+    annotations = robot.getAnnotations(layer=allLayer, fragment=shot)
+
+    # start by gathering all person names
+    personNames = set([])
+    for annotation in annotations:
+        personNames.update(annotation.data.known)
+
+    # create an annotator x personName table
+    df = DataFrame(columns=personNames.union(set(['?'])))
+
+    # fill this table...
+    for a, annotation in enumerate(annotations):
+
+        # get annotator login
+        annotator = annotation.data.annotator
+
+        # store whether annotator found an unknown speaking face
+        unknown = annotation.data.unknown
+        df.at[annotator, '?'] = 'speakingFace' if unknown else 'noFace'
+
+        # store known annotation
+        known = annotation.data.known
+        for personName in personNames:
+            # if the annotator annotated this personName
+            # then we use his/her decision.
+            # if s/he did not annotate this personName
+            #  - we choose 'dontKnow' if s/he marked someone as unknown
+            #  - we choose 'noFace' if s/he did not mark anyone as unknown
+            status = known.get(personName,
+                               'dontKnow' if unknown else 'noFace')
+            df.at[annotator, personName] = status
+
+    if df['?'].value_counts().get('speakingFace', 0) > 0:
+        robot.createAnnotation(unknownLayer,
+                               medium=medium, fragment=shot,
+                               data=None, returns_id=True)
+        logger.info('found unknown in shot {shot}'.format(shot=shot))
         continue
 
-    # else find if there is a consensus between annotator
-    # list all annotated status for each hypothesis person of each annotation
-    d = {}
-    for labelCompleteGroudtruth in labelsCompleteGroudtruth:
-        for p in labelCompleteGroudtruth.known:
-            d.setdefault(p, []).append(labelCompleteGroudtruth.known[p])
-
-    # if shot is already in labelFinalGroudtruthLayer: skip the aggragation
-    if robot.getAnnotations(layer = labelFinalGroudtruthLayer, fragment = id_shot) != []:
-        logger.info("{shot:s} is already in mediaeval.groundtruth.label.agragated".format(shot=id_shot))        
+    # no consensus until we have at least 2 annotators
+    nAnnotators = len(df)
+    if nAnnotators < 2:
+        logger.debug(
+            "no consensus for shot {shot} - "
+            "only {n} annotators".format(
+                shot=shot, n=nAnnotators))
         continue
 
-    # check if the best status of each hypothesis person :
-    #  - is different than dontKown
-    #  - have at least 2 annotations for this status
-    #  - there is a majority of this status
-    aggregated = {}
-    for p in d:
-        state, nb = Counter(d[p]).most_common(1)
+    for personName in personNames:
 
-        if state == 'dontKnow' or nb < 2 or float(nb)/float(len(d[p])) < 0.5:
-            aggregated = False
+        counts = df[personName].value_counts()
+
+        # no consensus if the count of expressed status
+        # (ie not 'dontKnow') is smaller than 2
+        expressedCounts = sum(count for status, count in counts.iteritems()
+                              if status != 'dontKnow')
+        if expressedCounts < 2:
+            consensus = {}
+            logger.debug(
+                "no consensus for shot {s} - "
+                "only {n} expressed annotation(s) for {p} ".format(
+                    s=shot, n=expressedCounts, p=personName))
             break
+
+        # no consensus if the most frequent is 'dontKnow'
+        status = counts.argmax()
+        if status == 'dontKnow':
+            consensus = {}
+            logger.debug(
+                "no consensus for shot {s} - "
+                "most frequent state for {p} is 'dontKnow'".format(
+                    s=shot, p=personName))
+            break
+
+        # no consensus if the highest frequency is < 2
+        count = counts.max()
+        if count < 2:
+            consensus = {}
+            logger.debug(
+                "no consensus for shot {s} - "
+                "most frequent state for {p} only has {n} votes".format(
+                    s=shot, p=personName, n=count))
+            break
+
+        # consensus if the most frequent is
+        # strictly more frequent than 50%
+        ratio = count / float(expressedCounts)
+        if ratio > 0.5:
+            consensus[personName] = status
         else:
-            aggregated[p] = state
+            consensus = {}
+            logger.debug(
+                "no consensus for shot {s} - "
+                "most frequent state for {p} does not have majority (r:d)only has {n} votes".format(
+                    s=shot, p=personName, n=count))
+            break
 
-    # if there is a consensus for this shot, add an annotation with the consensus to labelFinalGroudtruthLayer
-    if aggregated: 
-        robot.createAnnotation(labelFinalGroudtruthLayer, fragment=id_shot, data=aggregated)
-        logger.info("add {shot:s} to mediaeval.groundtruth.label.agragated".format(shot=id_shot))  
 
-
+    # found consensus
+    if consensus:
+        robot.createAnnotation(
+            consensusLayer,
+            medium=medium, fragment=shot,
+            data=consensus, returns_id=True)
+        logger.info("found consensus for shot {s}".format(s=shot))
