@@ -44,16 +44,19 @@ from logging.handlers import TimedRotatingFileHandler
 
 def create_logger(robot, path=None, debug=False):
 
-    if path is None:
-        return NullHandler()
-
-    logFile = os.path.join(path, robot + '.log')
     logger = logging.getLogger(robot)
     logger.setLevel(logging.DEBUG if debug else logging.INFO)
-    handler = TimedRotatingFileHandler(logFile, when='midnight')
+
+    if path is None:
+        handler = NullHandler()
+    else:
+        logFile = os.path.join(path, robot + '.log')
+        handler = TimedRotatingFileHandler(logFile, when='midnight')
+
     formatter = Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
+
     logger.addHandler(handler)
 
     return logger
@@ -104,7 +107,7 @@ class RobotCamomile(Camomile):
             raise ValueError(msg % name)
 
         msg = 'Found too many (%d) queues with name "%s".'
-        raise ValueError(msg % (len(matchingQueues, name)))
+        raise ValueError(msg % (len(matchingQueues), name))
 
     def getCorpusByName(self, name):
 
@@ -119,7 +122,7 @@ class RobotCamomile(Camomile):
             raise ValueError(msg % name)
 
         msg = 'Found too many (%d) queues with name "%s".'
-        raise ValueError(msg % (len(matchingCorpora, name)))
+        raise ValueError(msg % (len(matchingCorpora), name))
 
     def getLayerByName(self, corpus, name):
 
@@ -134,7 +137,7 @@ class RobotCamomile(Camomile):
             raise ValueError(msg % name)
 
         msg = 'Found too many (%d) layers with name "%s".'
-        raise ValueError(msg % (len(matchingLayers, name)))
+        raise ValueError(msg % (len(matchingLayers), name))
 
     def dequeue_loop(self, queue):
 
