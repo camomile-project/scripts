@@ -27,25 +27,28 @@
 
 # AUTHORS
 # Hervé BREDIN -- http://herve.niderb.fr/
+# Johann POIGNANT -- http://johannpoignant.github.io/
 
 """
-MediaEval submission robot
+MediaEval label in robot
 
 Usage:
-  robot_submission [options]
+  robot_label_in [options]
 
 Options:
   -h --help                Show this screen.
   --version                Show version.
   --debug                  Show debug information.
-  --url=URL                Submission server URL
+  --url=URL                Camomile server URL
                            [default: http://api.mediaeval.niderb.fr]
   --password=P45sw0Rd      Password
-  --period1=N              Query label and evidence groudtruth every N sec [default: 86400].
-  --period2=N              Query queue in size every N sec [default: 600].
-  --sizeQueue=N            Size of the queue [default: 400].
-  --videosList=vl          list of video to process
-  --nbOtherNames           number of other names to porposed in addition to the ones in the submissions
+  --refresh=N              Refresh annotation status every N sec
+                           [default: 86400].
+  --period=N               Query label queue every N sec [default: 600].
+  --limit=N                Approximate maximum number of items in
+                           label queue [default: 400].
+  --videos=PATH            List of video to process
+  --other                  Number of alternative person names [default: 10]
   --log=DIR                Path to log directory.
 """
 
@@ -53,146 +56,252 @@ from common import RobotCamomile, create_logger
 from docopt import docopt
 from datetime import datetime
 
-def update_hypothesis(test, shotWithFinalAnnotation, shotToBeAnnotated, nbOtherNames):
-    # remove shot from shotToBeAnnotated if there is enough annotation
-    for shot in shotWithFinalAnnotation & set(shotToBeAnnotated.keys()):
-        del shotToBeAnnotated[shot]
-
-    # get all layers hypothesis not deleted
-    listLayerHypothesis = []
-    for layer in robot.getLayers(test):
-        if layer.data_type == 'mediaeval.persondiscovery.label'  and  layer.description.status != "deleted" : 
-            mapping = 'mapping' in layer.description and mapping = layer.description.mapping or mapping = {}
-            listLayerHypothesis.append([layer._id, mapping])
-
-    # for each shot to be annotated list hypothesis person name
-    for shot in shotToBeAnnotated:
-        for layer, mapping in listLayerHypothesis:
-            for a in [a for a in robot.getAnnotations(layer = layer, fragment = shot) if a.data.person_name in mapping]:
-                shotToBeAnnotated[a.fragment]["hypothesis"].add(mapping[a.data.person_name)
-
-        # append hypothesis slected by other annotator
-        for a in robot.getAnnotations(layer = labelCompleteGroudtruthLayer, fragment = shot)
-            shotToBeAnnotated[a.fragment]["hypothesis"].add(a.output.known)
-
-    # for each shot to be annotated list hypothesis to put in others
-    for shot in shotToBeAnnotated:
-        othersTmp = []
-        # list hypothesis in other shots of the same video
-        for shotNear in [shotNear for shotNear in shotToBeAnnotated if shot != shotNear and shotToBeAnnotated[shot]["id_medium"] == shotToBeAnnotated[shotNear]["id_medium"]]:
-            for p in shotToBeAnnotated[shot]["hypothesis"]:
-                othersTmp.append([abs(shotToBeAnnotated[shot]["start"]-shotToBeAnnotated[shotNear]["start"]), p])
-
-        # keep only the XXX hypothesis the more near temporally
-        for d, p in sorted(othersTmp)[:nbOtherNames]:
-            shotToBeAnnotated[shot]["others"].add(p)
-
-        shotToBeAnnotated[shot]["others"] = shotToBeAnnotated[shot]["others"]+set(["david_pujadas", "beatrice_schonberg", "laurent_delahousse", "francoise_laborde"])
-
-
-    return shotToBeAnnotated
-
+ANCHORS = set(["david_pujadas",
+               "beatrice_schonberg",
+               "laurent_delahousse",
+               "francoise_laborde"])
 
 arguments = docopt(__doc__, version='0.1')
 
+# Camomile API
 url = arguments['--url']
 password = arguments['--password']
-period1 = int(arguments['--period1'])
-period2 = int(arguments['--period2'])
-sizeQueue = int(arguments['--sizeQueue'])
-videosList = arguments['--videosList']
-nbOtherNames = int(arguments['--nbOtherNames'])
 
-
+# debugging and logging
 debug = arguments['--debug']
 log = arguments['--log']
 logger = create_logger('robot_label_in', path=log, debug=debug)
-robot = RobotCamomile(url, 'robot_label', password=password, period=period2, logger=logger)
 
-# corpus id
+# how often to refresh annotation status
+refresh = int(arguments['--refresh'])
+
+# how often to pick queue length
+period = int(arguments['--period'])
+
+# approximate maximum number of items in queue
+limit = int(arguments['--limit'])
+
+# only annotate those videos
+videos = arguments['--videos']
+
+other = int(arguments['--other'])
+
+robot = RobotCamomile(
+    url, 'robot_label', password=password,
+    period=period, logger=logger)
+
+# test corpus
 test = robot.getCorpusByName('mediaeval.test')
 
 # layer containing submission shots
-submissionShotLayer = robot.getLayerByName(test, 'mediaeval.submission_shot')
-# layer containing aggregated annotations for label grondtruth
-labelFinalGroudtruthLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.aggregated')
-# layer containing complete annotations for label grondtruth
-labelCompleteGroudtruthLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.complete')
-# layer containing shot with an unknown person
-labelUnknownLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.unknown')
-# layer containing manual annotations for mugshot
-evidenceMugShotLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.evidence.mugshot')
-# id of the in coming queue
-InCommingQueue = robot.getQueueByName('mediaeval.submission.label.in')
+submissionShotLayer = robot.getLayerByName(
+    test, 'mediaeval.submission_shot')
 
-# list of video to process
-if videosList: 
-    videos = [video for video in open(videosList).read().splitlines()]
-    mediaIds = set([media['_id'] for media in robot.getMedia(test) if media['name'] in videos])
+# layer containing every label annotations
+allLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.all')
+
+# layer containing consensus label annotations
+consensusLayer = robot.getLayerByName(
+    test, 'mediaeval.groundtruth.label.consensus')
+
+# mugshot layer
+mugshotLayer = robot.getLayerByName(
+    test, 'mediaeval.groundtruth.evidence.mugshot')
+
+# filled by this script and popped by label annotation front-end
+labelInQueue = robot.getQueueByName(
+    'mediaeval.label.in')
+
+# load list of shots in test corpus
+# as {id: details} dictionary
+
+logger.info('loading submission shots')
+
+submissionShots = {}
+for _, annotations in robot.getAnnotations_iter(submissionShotLayer):
+    for shot in annotations:
+        submissionShots[shot._id] = {'id_medium': shot.id_medium,
+                                     'start': shot.fragment.segment.start,
+                                     'end': shot.fragment.segment.end}
+
+
+# sort submissionShots by medium and chronologically
+sortedSubmissionShots = sorted(
+    submissionShots,
+    key=lambda s: (submissionShots[s]['id_medium'],
+                   submissionShots[s]['start']))
+
+# load list of media in test corpus
+# as {name: id} dictionary
+media = {medium.name: medium._id for medium in robot.getMedia(test)}
+
+if videos:
+    with open(videos, 'r') as f:
+        videos = [v.strip() for v in f]
+    media = [media[v] for v in videos if v in media]
 else:
-    mediaIds = set([media['_id'] for media in robot.getMedia(test)])
+    media = media.values()
 
-# initialize a dictionnary with shot as keys and personNames as values
-shotToBeAnnotated = {shot['_id']: {"hypothesis":set([]), 
-                                   "id_medium":shot.id_medium, 
-                                   "start":shot.fragment.segment.start, 
-                                   "end":shot.fragment.segment.end,
-                                   "others":set([]) }
-                     for shot in robot.getAnnotations(layer = submissionShotLayer)
-                     if shot.id_medium in mediaIds
-                    }
+# subset of submission shots
+shots = set([s for s, d in submissionShots.iteritems()
+             if d['id_medium'] in media])
 
-# list of shots with final annotation
-shotWithFinalAnnotation = set([a.fragment for a in robot.getAnnotations(layer = labelFinalGroudtruthLayer)])
 
-# initialisze list of hypothesis for each shot
-shotToBeAnnotated = update_hypothesis(test, shotWithFinalAnnotation, shotToBeAnnotated, nbOtherNames)
+def update(shots):
 
-# list of person name with at least one mugshot available
-mugShots = set([a.fragment for a in robot.getAnnotations(layer = evidenceMugShotLayer)])
+    logger.info('refresh - loading consensus shots')
 
-t = datetime.now() 
+    # shots for which a consensus has already been reached
+    consensus = {}
+    for _, annotations in robot.getAnnotations_iter(consensusLayer):
+        for annotation in annotations:
+            consensus[annotation.fragment] = annotation.data
+    shotWithConsensus = set(consensus)
 
-while True :
-    for shot in shotToBeAnnotated:
-        # if not all mugshots are available skip the shot
-        if shotToBeAnnotated[shot]["hypothesis"] - mugShots: 
+    # shots for which we are still missing annotations
+    # in order to reach a consensus
+    remainingShots = shots - shotWithConsensus
+
+    logger.info('refresh - loading person names with mugshot')
+
+    # set of person name with a mugshot
+    personNameWithMugshot = set([
+        annotation.fragment
+        for _, A in robot.getAnnotations_iter(mugshotLayer)
+        for annotation in A])
+
+    logger.info('refresh - loading hypothesized label layers')
+
+    # load mapping of all existing label layers
+    layerMapping = {}
+    for layer in robot.getLayers(
+            test, data_type='mediaeval.persondiscovery.label'):
+
+        # skip original submission layers
+        if 'copy' not in layer.description:
             continue
 
-        # if this shot has been already annotated with an unknown
-        labelUnknown = robot.getAnnotations(layer = labelUnknownLayer, fragment = shot)
-        if labelUnknown:
-            # if there is no new mugshot to help annotator  
-            if not (shotToBeAnnotated[shot]["hypothesis"] - labelUnknown['data']): 
-                continue
-            # else re-annotated the shot and remove it from mediaeval.groundtruth.label.unknown
-            robot.deleteAnnotation(labelUnknown)
+        # skip deleted submission layers
+        if 'deleted' in layer.description:
+            continue
 
-        # get who already annotated the shot
-        labelCompleteGroudtruth = robot.getAnnotations(layer = labelCompleteGroudtruthLayer, fragment = shot)
-        l_annotator = [login['data']['annotator'] for login in labelCompleteGroudtruth]
-        
-        # add a new element in the queue in
+        # default to empty mapping
+        layerMapping[layer._id] = layer.description.get('mapping', {})
+
+    hypotheses = {}
+    others = {}
+
+    logger.info('refresh - building hypothesis for remaining shots')
+
+    # build 'hypothesis' and 'others' fields for all remaining shots
+    for shot in remainingShots:
+
+        hypothesis = set([])
+        skip = False
+
+        for annotation in robot.getAnnotations(layer=allLayer, fragment=shot):
+            hypothesis.update(set(annotation.data.annotation.keys()))
+
+        # find shot in all submissions
+        for layer, mapping in layerMapping.iteritems():
+
+            for annotation in robot.getAnnotations(layer=layer,
+                                                   fragment=shot):
+
+                # find if (and how) the hypothesized name was mapped
+                hypothesizedPersonName = annotation.data.person_name
+                correctedPersonName = mapping.get(
+                    hypothesizedPersonName, None)
+
+                # in case it has not been checked yet
+                # skip this shot entirely
+                if correctedPersonName is None:
+                    logger.info(
+                        'refresh - skipping shot {shot} because evidence '
+                        'for {name} has not been checked yet.'.format(
+                            shot=shot, name=hypothesizedPersonName))
+                    skip = True
+                    break
+
+                # in case it has been checked but found to NOT be an evidence
+                # don't add this hypothesis
+                if correctedPersonName is False:
+                    continue
+
+                # in case the mapped person name does not have a mugshot yet
+                # skip this shot entirely
+                if correctedPersonName not in personNameWithMugshot:
+                    logger.info(
+                        'refresh - skipping shot {shot} because no mugshot '
+                        'is available for {name}.'.format(
+                            shot=shot, name=correctedPersonName))
+                    skip = True
+                    break
+
+                hypothesis.add(correctedPersonName)
+
+            if skip:
+                break
+
+        if not skip:
+            hypotheses[shot] = hypothesis
+
+    for shot in hypotheses:
+
+        other = set(ANCHORS)
+
+        i = sortedSubmissionShots.index(shot)
+
+        n = len(sortedSubmissionShots)
+        nearShots = sortedSubmissionShots[max(i - 5, 0):min(i + 5, n)]
+
+        for nearShot in nearShots:
+            other.update(hypotheses.get(nearShot, set([])))
+
+        other.difference_update(hypotheses[shot])
+        others[shot] = other
+
+    return hypotheses, others, personNameWithMugshot
+
+t = datetime.now()
+
+hypotheses, others, withMugshot = update(shots)
+
+while True:
+
+    # sort shots from the shot with the highest number of hypotheses
+    # to the shot with the smallest number of hypotheses
+    # (this is to avoid annotating numerous empty shots)
+
+    sortedShots = sorted(hypotheses,
+                         key=lambda s: len(hypotheses[s]),
+                         reverse=True)
+
+    for shot in sortedShots:
+
+        hypothesis = hypotheses[shot]
+
+        # do not annotate a shot for which at least
+        # one hypothesis does not have a mugshot
+        if hypothesis - withMugshot:
+            continue
+
+        # get set of users who already annotated this shot
+        annotators = set([
+            a.data.annotator for a in robot.getAnnotations(
+                layer=allLayer, fragment=shot)])
+
         item = {}
-        item["id_medium"]    = shotToBeAnnotated[shot]["id_medium"]
-        item["id_shot"]      = shot
-        item["start"]        = shotToBeAnnotated[shot]["start"]
-        item["end"]          = shotToBeAnnotated[shot]["end"]
-        item["hypothesis"]   = list(shotToBeAnnotated[shot]["hypothesis"])
-        item["others"]       = list(shotToBeAnnotated[shot]["others"])
-        item["annotated_by"] = l_annotator
+        item['id_shot'] = shot
+        item['id_medium'] = submissionShots[shot]['id_medium']
+        item['start'] = submissionShots[shot]['start']
+        item['end'] = submissionShots[shot]['end']
+        item['hypothesis'] = list(hypothesis)
+        item['others'] = list(others[shot])
+        item['annotated_by'] = list(annotators)
 
-        robot.enqueue_fair(InCommingQueue, item, limit=sizeQueue)
+        robot.enqueue_fair(labelInQueue, item, limit=limit)
 
-        if (datetime.now() - t).total_seconds() < period1:
-            # list of shots with final annotation
-            shotWithFinalAnnotation = set([a["fragment"] for a in robot.getAnnotations(layer = labelFinalGroudtruthLayer)])
-            
-            # update list of hypothesis for each shot
-            shotToBeAnnotated = update_hypothesis(test, shotWithFinalAnnotation, shotToBeAnnotated, nbOtherNames)
-
-            # list of person name with at least one mugshot available
-            mugShots = set([a['fragment'] for a in robot.getAnnotations(layer = evidenceMugShotLayer)])
-
-            # get current time
-            t = datetime.now()  
+        if (datetime.now() - t).total_seconds() > refresh:
+            hypotheses, others, withMugshot = update(shots)
+            t = datetime.now()
