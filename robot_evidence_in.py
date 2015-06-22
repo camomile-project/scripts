@@ -75,8 +75,12 @@ test = robot.getCorpusByName('mediaeval.test')
 evidenceGroundtruthLayer = robot.getLayerByName(
     test, 'mediaeval.groundtruth.evidence.all')
 
-def update(test):
+def update(nbAnnotationInQueue):
     # for all hypothesis layer
+
+    items = []
+    if nbAnnotationInQueue == limit:
+        return items
 
     mapping = {}
     for _, evidences in robot.getAnnotations_iter(evidenceGroundtruthLayer):
@@ -89,7 +93,7 @@ def update(test):
                   else False)
             mapping[id_shot, person_name, source] = to
 
-    items = []
+    
     for layer in robot.getLayers(
             test, data_type='mediaeval.persondiscovery.evidence'):
 
@@ -163,7 +167,7 @@ def update(test):
 
                     items.append(item)
 
-                    if len(items) > limit:
+                    if len(items) > limit - nbAnnotationInQueue:
                         return items
 
         if not annotationToDo:
@@ -180,7 +184,8 @@ def update(test):
 
 t = datetime.now()
 while True:
-    items = update(test)
+
+    items = update(robot.pickLength(evidenceInQueue))
     if not items:
         sleep(period)
 
