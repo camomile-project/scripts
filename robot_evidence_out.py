@@ -135,11 +135,15 @@ for item in robot.dequeue_loop(evidenceOutQueue):
             "new evidence - {name:s} - {source:s}".format(
                 name=person_name, source=source))
 
-    # propagate this evidence to the corresponding submission mapping
-    description = robot.getLayer(id_submission).description
-    # (initialize empty mapping if needed)
-    _ = description.setdefault('mapping', {})
-    description.mapping[person_name] = mapping[id_shot,
-                                               person_name,
-                                               source]
-    robot.updateLayer(id_submission, description=description)
+    try:
+        # propagate this evidence to the corresponding submission mapping
+        description = robot.getLayer(id_submission).description
+        # (initialize empty mapping if needed)
+        _ = description.setdefault('mapping', {})
+        description.mapping[person_name] = mapping[id_shot,
+                                                   person_name,
+                                                   source]
+        robot.updateLayer(id_submission, description=description)
+    except Exception:
+        logger.debug(
+            "layer {layer} no longer exists".format(layer=id_submission))
