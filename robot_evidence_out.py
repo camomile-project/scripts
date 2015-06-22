@@ -29,10 +29,10 @@
 # Hervé BREDIN -- http://herve.niderb.fr/
 
 """
-MediaEval submission robot
+MediaEval evidence out robot
 
 Usage:
-  robot_submission [options]
+  robot_evidence_out [options]
 
 Options:
   -h --help                Show this screen.
