@@ -185,11 +185,11 @@ while True:
         sleep(period)
 
     for item in items:
-        robot.enqueue_fair(evidenceInQueue, item, limit=limit)
-
         logger.info(
             "new evidence - {name:s} - {source:s}".format(
                 name=person_name, source=source))
+
+        robot.enqueue_fair(evidenceInQueue, item, limit=limit)
 
         if (datetime.now() - t).total_seconds() > refresh:
             t = datetime.now()
