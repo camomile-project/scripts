@@ -130,8 +130,8 @@ for item in robot.dequeue_loop(submissionQueue):
     label.description.id_evidence = evidence._id
     robot.updateLayer(label._id, description=label.description)
 
-    # give READ permission to robot_evidence
-    robot.setLayerPermissions(evidence._id, robot.READ, user=robot_evidence)
+    # give ADMIN permission to robot_evidence
+    robot.setLayerPermissions(evidence._id, robot.ADMIN, user=robot_evidence)
 
     # give READ permission to robot_label
     robot.setLayerPermissions(label._id, robot.READ, user=robot_label)
