@@ -41,14 +41,15 @@ Options:
   --url=URL                Submission server URL
                            [default: http://api.mediaeval.niderb.fr]
   --password=P45sw0Rd      Password
-  --period=N               Query submission queue every N sec [default: 600].
-  --limit=N                Size of the queue [default: 400].
+  --period=N               Query submission queue every N sec [default: 3600].
+  --limit=N                Size of the queue [default: 1000].
   --log=DIR                Path to log directory.
 
 """
 
 from common import RobotCamomile, create_logger
 from docopt import docopt
+from datetime import datetime
 
 arguments = docopt(__doc__, version='0.1')
 
@@ -65,11 +66,6 @@ robot = RobotCamomile(
     url, 'robot_evidence', password=password,
     period=period, logger=logger)
 
-# filled by robot_submission
-# {evidence: id_evidence, label: id_label}
-evidenceSubmissionQueue = robot.getQueueByName(
-    'mediaeval.submission.evidence.in')
-
 # filled by this script and popped by evidence annotation front-end
 evidenceInQueue = robot.getQueueByName(
     'mediaeval.evidence.in')
@@ -79,17 +75,9 @@ test = robot.getCorpusByName('mediaeval.test')
 evidenceGroundtruthLayer = robot.getLayerByName(
     test, 'mediaeval.groundtruth.evidence.all')
 
-# forever loop on evidence submission queue
-for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
+def update(test):
+    # for all hypothesis layer
 
-    # evidenceSubmissionQueue is filled by submission script
-    # {evidence: id_evidence, label: id_label}
-    evidenceHypothesisLayer = submissionLayers.evidence
-    id_submission = submissionLayers.label
-
-    # keep track of (already done) manual annotations
-    # {id_shot, person_name, source: corrected_person_name}
-    # {id_shot, person_name, source: False} (if not an evidence)
     mapping = {}
     for _, evidences in robot.getAnnotations_iter(evidenceGroundtruthLayer):
         for evidence in evidences:
@@ -101,53 +89,108 @@ for submissionLayers in robot.dequeue_loop(evidenceSubmissionQueue):
                   else False)
             mapping[id_shot, person_name, source] = to
 
-    # process evidence layer medium by medium
-    for id_medium, evidences in robot.getAnnotations_iter(
-            evidenceHypothesisLayer):
+    items = []
+    for layer in robot.getLayers(
+            test, data_type='mediaeval.persondiscovery.evidence'):
 
-        # loop on evidence from one medium
-        for evidence in evidences:
+        # skip original submission layers
+        if 'copy' not in layer.description:
+            continue
 
-            id_shot = evidence.fragment
-            person_name = evidence.data.person_name
-            source = evidence.data.source
+        # skip deleted submission layers
+        if 'deleted' in layer.description:
+            continue
 
-            # if this hypothesized evidence has been checked already
-            if (id_shot, person_name, source) in mapping:
+        # skip if all annotations are done
+        if 'annotationsComplete' in layer.description:
+            continue
 
-                logger.debug(
-                    "existing evidence - {name:s} - {source:s}".format(
-                        name=person_name, source=source))
+        # {evidence: id_evidence, label: id_label}
+        evidenceHypothesisLayer = layer.evidence
+        id_submission = layer.label
 
-                # propagate this evidence to this submission mapping
-                description = robot.getLayer(id_submission).description
-                # (initialize empty mapping if needed)
-                _ = description.setdefault('mapping', {})
-                description.mapping[person_name] = mapping[id_shot,
-                                                           person_name,
-                                                           source]
-                robot.updateLayer(id_submission, description=description)
+        # keep track of (already done) manual annotations
+        # {id_shot, person_name, source: corrected_person_name}
+        # {id_shot, person_name, source: False} (if not an evidence)
 
-            # if this hypothesized evidence has not been checked yet
-            # push to evidence annotation frontend
-            else:
+        annotationToDo = False
 
-                item = {}
+        for id_medium, evidences in robot.getAnnotations_iter(
+                evidenceHypothesisLayer):
 
-                item['id_submission'] = id_submission
-                item['person_name'] = person_name
-                item['source'] = source
+            # loop on evidence from one medium
+            for evidence in evidences:
 
-                item['id_medium'] = id_medium
-                item['id_shot'] = id_shot
-                segment = robot.getAnnotation(id_shot).fragment.segment
-                item['start'] = segment.start - (5 if source == 'audio'
-                                                 else 0)
-                item['end'] = segment.end + (5 if source == 'audio'
-                                             else 0)
+                id_shot = evidence.fragment
+                person_name = evidence.data.person_name
+                source = evidence.data.source
 
-                robot.enqueue_fair(evidenceInQueue, item, limit=limit)
+                # if this hypothesized evidence has been checked already
+                if (id_shot, person_name, source) in mapping:
 
-                logger.info(
-                    "new evidence - {name:s} - {source:s}".format(
-                        name=person_name, source=source))
+                    logger.debug(
+                        "existing evidence - {name:s} - {source:s}".format(
+                            name=person_name, source=source))
+
+                    # propagate this evidence to this submission mapping
+                    description = robot.getLayer(id_submission).description
+                    # (initialize empty mapping if needed)
+                    _ = description.setdefault('mapping', {})
+                    description.mapping[person_name] = mapping[id_shot,
+                                                               person_name,
+                                                               source]
+                    robot.updateLayer(id_submission, description=description)
+
+                # if this hypothesized evidence has not been checked yet
+                # push to evidence annotation frontend
+                else:
+
+                    annotationToDo = True
+
+                    item = {}
+
+                    item['id_submission'] = id_submission
+                    item['person_name'] = person_name
+                    item['source'] = source
+
+                    item['id_medium'] = id_medium
+                    item['id_shot'] = id_shot
+                    segment = robot.getAnnotation(id_shot).fragment.segment
+                    item['start'] = segment.start - (5 if source == 'audio'
+                                                       else -0.5)
+                    item['end'] = segment.end + (5 if source == 'audio'
+                                                   else -0.5)
+
+                    items.append(item)
+
+                    if len(items) > limit:
+                        return items
+
+        if not annotationToDo:
+            description = layer.description
+            description['annotationsComplete'] = True
+            robot.updateLayer(evidenceHypothesisLayer, 
+                              description=description)
+
+            logger.debug("all evidences are annotated for {layer:s}".format(
+                         layer=evidenceHypothesisLayer))
+
+    return items
+
+
+t = datetime.now()
+while True:
+    items = update(test)
+    if not items:
+        sleep(period)
+
+    for item in items:
+        robot.enqueue_fair(evidenceInQueue, item, limit=limit)
+
+        logger.info(
+            "new evidence - {name:s} - {source:s}".format(
+                name=person_name, source=source))
+
+        if (datetime.now() - t).total_seconds() > refresh:
+            t = datetime.now()
+            break
