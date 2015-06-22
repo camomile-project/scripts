@@ -98,11 +98,16 @@ submissionShotLayer = robot.getLayerByName(
     test, 'mediaeval.submission_shot')
 
 # layer containing every label annotations
-allLayer = robot.getLayerByName(test, 'mediaeval.groundtruth.label.all')
+allLayer = robot.getLayerByName(
+    test, 'mediaeval.groundtruth.label.all')
 
 # layer containing consensus label annotations
 consensusLayer = robot.getLayerByName(
     test, 'mediaeval.groundtruth.label.consensus')
+
+# layer containing "unknown" annotations
+unknownLayer = robot.getLayerByName(
+    test, 'mediaeval.groundtruth.label.unknown')
 
 # mugshot layer
 mugshotLayer = robot.getLayerByName(
@@ -152,15 +157,20 @@ def update(shots):
     logger.info('refresh - loading consensus shots')
 
     # shots for which a consensus has already been reached
-    consensus = {}
+    shotWithConsensus = set([])
     for _, annotations in robot.getAnnotations_iter(consensusLayer):
         for annotation in annotations:
-            consensus[annotation.fragment] = annotation.data
-    shotWithConsensus = set(consensus)
+            shotWithConsensus.add(annotation.fragment)
+
+    # shots for which a unknown has been annotated
+    shotWithUnknown = set([])
+    for _, annotations in robot.getAnnotations_iter(unknownLayer):
+        for annotation in annotations:
+            shotWithUnknown.add(annotation.fragment)
 
     # shots for which we are still missing annotations
     # in order to reach a consensus
-    remainingShots = shots - shotWithConsensus
+    remainingShots = shots - shotWithConsensus.union(shotWithUnknown)
 
     logger.info('refresh - loading person names with mugshot')
 
@@ -248,7 +258,7 @@ def update(shots):
 
     for shot in hypotheses:
 
-        other = set(ANCHORS)
+        other = set([])
 
         i = sortedSubmissionShots.index(shot)
 
@@ -297,7 +307,7 @@ while True:
         item['start'] = submissionShots[shot]['start']
         item['end'] = submissionShots[shot]['end']
         item['hypothesis'] = list(hypothesis)
-        item['others'] = list(others[shot])
+        item['others'] = list(ANCHORS) + list(others[shot])
         item['annotated_by'] = list(annotators)
 
         robot.enqueue_fair(labelInQueue, item, limit=limit)
