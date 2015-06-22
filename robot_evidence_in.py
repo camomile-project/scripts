@@ -110,17 +110,19 @@ def update(nbAnnotationInQueue):
             continue
 
         # {evidence: id_evidence, label: id_label}
-        evidenceHypothesisLayer = layer.evidence
-        id_submission = layer.label
+        evidenceLayer = layer._id
+        labelLayer = layer.description.id_label
 
+        description = robot.getLayer(labelLayer).description
+        # (initialize empty mapping if needed)
+        _ = description.setdefault('mapping', {})
         # keep track of (already done) manual annotations
         # {id_shot, person_name, source: corrected_person_name}
         # {id_shot, person_name, source: False} (if not an evidence)
 
         annotationToDo = False
 
-        for id_medium, evidences in robot.getAnnotations_iter(
-                evidenceHypothesisLayer):
+        for id_medium, evidences in robot.getAnnotations_iter(evidenceLayer):
 
             # loop on evidence from one medium
             for evidence in evidences:
@@ -128,6 +130,9 @@ def update(nbAnnotationInQueue):
                 id_shot = evidence.fragment
                 person_name = evidence.data.person_name
                 source = evidence.data.source
+
+                if person_name in description.mapping:
+                    continue
 
                 # if this hypothesized evidence has been checked already
                 if (id_shot, person_name, source) in mapping:
@@ -137,13 +142,11 @@ def update(nbAnnotationInQueue):
                             name=person_name, source=source))
 
                     # propagate this evidence to this submission mapping
-                    description = robot.getLayer(id_submission).description
-                    # (initialize empty mapping if needed)
-                    _ = description.setdefault('mapping', {})
+
                     description.mapping[person_name] = mapping[id_shot,
                                                                person_name,
                                                                source]
-                    robot.updateLayer(id_submission, description=description)
+                    robot.updateLayer(labelLayer, description=description)
 
                 # if this hypothesized evidence has not been checked yet
                 # push to evidence annotation frontend
@@ -153,7 +156,7 @@ def update(nbAnnotationInQueue):
 
                     item = {}
 
-                    item['id_submission'] = id_submission
+                    item['id_submission'] = labelLayer
                     item['person_name'] = person_name
                     item['source'] = source
 
@@ -173,11 +176,10 @@ def update(nbAnnotationInQueue):
         if not annotationToDo:
             description = layer.description
             description['annotationsComplete'] = True
-            robot.updateLayer(evidenceHypothesisLayer, 
-                              description=description)
+            robot.updateLayer(evidenceLayer, description=description)
 
             logger.debug("all evidences are annotated for {layer:s}".format(
-                         layer=evidenceHypothesisLayer))
+                         layer=evidenceLayer))
 
     return items
 
@@ -192,10 +194,10 @@ while True:
     for item in items:
         logger.info(
             "new evidence - {name:s} - {source:s}".format(
-                name=person_name, source=source))
+                name=item['person_name'], source=item['source']))
 
         robot.enqueue_fair(evidenceInQueue, item, limit=limit)
 
-        if (datetime.now() - t).total_seconds() > refresh:
+        if (datetime.now() - t).total_seconds() > period:
             t = datetime.now()
             break
