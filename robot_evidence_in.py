@@ -49,6 +49,7 @@ Options:
 
 from common import RobotCamomile, create_logger
 from docopt import docopt
+from time import sleep
 from datetime import datetime
 
 arguments = docopt(__doc__, version='0.1')
@@ -75,6 +76,7 @@ test = robot.getCorpusByName('mediaeval.test')
 evidenceGroundtruthLayer = robot.getLayerByName(
     test, 'mediaeval.groundtruth.evidence.all')
 
+
 def update(nbAnnotationInQueue):
     # for all hypothesis layer
 
@@ -93,7 +95,6 @@ def update(nbAnnotationInQueue):
                   else False)
             mapping[id_shot, person_name, source] = to
 
-    
     for layer in robot.getLayers(
             test, data_type='mediaeval.persondiscovery.evidence'):
 
@@ -115,7 +116,7 @@ def update(nbAnnotationInQueue):
 
         description = robot.getLayer(labelLayer).description
         # (initialize empty mapping if needed)
-        _ = description.setdefault('mapping', {})
+        description.setdefault('mapping', {})
         # keep track of (already done) manual annotations
         # {id_shot, person_name, source: corrected_person_name}
         # {id_shot, person_name, source: False} (if not an evidence)
@@ -164,9 +165,9 @@ def update(nbAnnotationInQueue):
                     item['id_shot'] = id_shot
                     segment = robot.getAnnotation(id_shot).fragment.segment
                     item['start'] = segment.start - (5 if source == 'audio'
-                                                       else -0.5)
+                                                     else -0.5)
                     item['end'] = segment.end + (5 if source == 'audio'
-                                                   else -0.5)
+                                                 else -0.5)
 
                     items.append(item)
 
