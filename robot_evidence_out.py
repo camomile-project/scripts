@@ -115,6 +115,7 @@ for item in robot.dequeue_loop(evidenceOutQueue):
         data['person_name'] = person_name
         data['is_evidence'] = is_evidence
         data['source'] = source
+        data['log'] = item.get('log', {})
         if is_evidence:
             data['corrected_person_name'] = corrected_person_name
             data['mugshot'] = {}

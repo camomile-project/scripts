@@ -96,7 +96,8 @@ for item in robot.dequeue_loop(labelOutQueue):
         medium=medium, fragment=shot,
         data={"known": known,
               "unknown": unknown,
-              "annotator": annotator})
+              "annotator": annotator,
+              "log": item.get('log', {})})
 
     # check new consensus for this shot
 
