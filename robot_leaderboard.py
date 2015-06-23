@@ -187,6 +187,9 @@ while True:
         if 'copy' in layer.description:
             continue
 
+        if layer.description.get('status', 'incomplete') != 'complete':
+            continue
+
         # which team ? which submission ?
         team = layer.description.id_team
         name = layer.name
@@ -235,4 +238,5 @@ while True:
 
         robot.updateLayer(leaderboard[team], description=description)
 
+    logger.info("waiting for {period}s".format(period=period))
     sleep(period)
