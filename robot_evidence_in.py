@@ -81,8 +81,10 @@ def update(nbAnnotationInQueue):
     # for all hypothesis layer
 
     items = []
-    if nbAnnotationInQueue == limit:
+    if nbAnnotationInQueue > limit:
         return items
+
+    logger.debug("loading list of existing evidences")
 
     mapping = {}
     for _, evidences in robot.getAnnotations_iter(evidenceGroundtruthLayer):
