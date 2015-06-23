@@ -121,6 +121,9 @@ for item in robot.dequeue_loop(submissionQueue):
         # in a try/except scope because it might have been deleted by now
         evidence = robot.duplicate_layer(id_evidence, returns_id=False)
     except Exception:
+        logger.error(
+            "error when create the copy of {evidence:s} ".format(
+                evidence=id_evidence))        
         continue
 
     # duplicate label layer
@@ -129,6 +132,10 @@ for item in robot.dequeue_loop(submissionQueue):
         label = robot.duplicate_layer(id_label, returns_id=False)
     except Exception:
         robot.deleteLayer(evidence._id)
+        logger.error(
+            """error when create the copy of {label:s}, 
+               remove the copy of {evidence:s}""".format(
+            label=id_label, evidence=id_evidence))        
         continue
 
     # update evidence --> label cross-reference
