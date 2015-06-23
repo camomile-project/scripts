@@ -117,10 +117,19 @@ for item in robot.dequeue_loop(submissionQueue):
             evidence=id_evidence, label=id_label))
 
     # duplicate evidence layer
-    evidence = robot.duplicate_layer(id_evidence, returns_id=False)
+    try:
+        # in a try/except scope because it might have been deleted by now
+        evidence = robot.duplicate_layer(id_evidence, returns_id=False)
+    except Exception:
+        continue
 
     # duplicate label layer
-    label = robot.duplicate_layer(id_label, returns_id=False)
+    try:
+        # in a try/except scope because it might have been deleted by now
+        label = robot.duplicate_layer(id_label, returns_id=False)
+    except Exception:
+        robot.deleteLayer(evidence._id)
+        continue
 
     # update evidence --> label cross-reference
     evidence.description.id_label = label._id
