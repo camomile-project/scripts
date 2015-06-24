@@ -70,7 +70,8 @@ def computeAveragePrecision(returned, relevant):
 
     returnedIsRelevant = np.array([item in relevant for item in returned])
     precision = np.cumsum(returnedIsRelevant) / (1. + np.arange(nReturned))
-    return np.sum(precision * returnedIsRelevant) / min(nReturned, nRelevant)
+    ap = np.sum(precision * returnedIsRelevant) / min(nReturned, nRelevant)
+    return ap
 
 
 def computeMeanAveragePrecision(robot, layer, media, shots, qRelevant):
@@ -79,7 +80,8 @@ def computeMeanAveragePrecision(robot, layer, media, shots, qRelevant):
     qReturned = []
     for medium in media:
         for annotation in robot.getAnnotations(layer=layer, medium=medium):
-            if annotation.fragment not in shots:
+            shot = annotation.fragment
+            if shot not in shots:
                 continue
             personName = annotation.data.person_name
             confidence = annotation.data.confidence
@@ -92,7 +94,7 @@ def computeMeanAveragePrecision(robot, layer, media, shots, qRelevant):
     qAveragePrecision = {}
     for query, relevant in qRelevant.iteritems():
         # filter shots by Levenshtein distance to query
-        returned = [s for s, p, _ in qReturned if ratio(query, p) > 0.95]
+        returned = [s for s, p, _ in qReturned if ratio(query, p) >= 0.95]
         # average precision for this query
         qAveragePrecision[query] = computeAveragePrecision(returned, relevant)
 
