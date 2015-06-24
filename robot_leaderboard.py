@@ -97,7 +97,8 @@ def computeMeanAveragePrecision(robot, layer, media, shots, qRelevant):
         qAveragePrecision[query] = computeAveragePrecision(returned, relevant)
 
     # mean average precision
-    return np.mean(qAveragePrecision.values())
+    mAP = np.mean(qAveragePrecision.values())
+    return mAP
 
 
 arguments = docopt(__doc__, version='0.1')
@@ -195,7 +196,8 @@ while True:
         runName = layer.name
 
         logger.info(
-            "evaluating {teamID}'s {name}".format(teamID=teams[teamID], name=runName))
+            "evaluating {teamID}'s {name}".format(
+                teamID=teams[teamID], name=runName))
 
         # evaluate this submission and store MAP value
         mAP = computeMeanAveragePrecision(
@@ -209,7 +211,7 @@ while True:
         teamName = teams[teamID]
         for runName, mAP in runs.iteritems():
             ranking.add((teamID, teamName, runName, mAP))
-    ranking = sorted(ranking, reverse=True, key=lambda s: s[2])
+    ranking = sorted(ranking, reverse=True, key=lambda s: s[3])
 
     for myTeamID, myTeamName in teams.iteritems():
 
