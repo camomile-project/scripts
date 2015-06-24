@@ -210,7 +210,7 @@ def update(shots):
         skip = False
 
         for annotation in robot.getAnnotations(layer=allLayer, fragment=shot):
-            hypothesis.update(set(annotation.data.known.keys()))
+            hypothesis.update(set(annotation.data.get('known', {}).keys()))
 
         # find shot in all submissions
         for layer, mapping in layerMapping.iteritems():
