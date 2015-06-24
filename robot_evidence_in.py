@@ -78,11 +78,6 @@ evidenceGroundtruthLayer = robot.getLayerByName(
 
 def update(numberOfEvidencesInQueue):
 
-    # do not add any new evidence if the queue is already full
-    newEvidences = []
-    if numberOfEvidencesInQueue > limit:
-        return newEvidences
-
     logger.debug("loading list of existing evidences")
 
     # keep track of (already done) manual annotations
@@ -100,33 +95,33 @@ def update(numberOfEvidencesInQueue):
             mapping[id_shot, person_name, source] = to
 
     # for all evidence layers
-    for layer in robot.getLayers(
+    for evidenceLayer in robot.getLayers(
             test, data_type='mediaeval.persondiscovery.evidence'):
 
         # skip original submission layers
-        if 'copy' not in layer.description:
+        if 'copy' not in evidenceLayer.description:
             continue
 
         # skip deleted submission layers
-        if 'deleted' in layer.description:
+        if 'deleted' in evidenceLayer.description:
             continue
 
         # skip if all evidences are already checked
-        if 'annotationsComplete' in layer.description:
+        if 'annotationsComplete' in evidenceLayer.description:
             continue
 
         # {evidence: id_evidence, label: id_label}
-        evidenceLayer = layer._id
-        labelLayer = layer.description.id_label
+        evidenceLayerID = evidenceLayer._id
+        labelLayerID = evidenceLayer.description.id_label
 
-        description = robot.getLayer(labelLayer).description
-        description.setdefault('mapping', {})
+        labelLayer = robot.getLayer(labelLayerID)
+        labelLayer.description.setdefault('mapping', {})
 
         # change this to true if at least one evidence needs to be checked
         hasUncheckedEvidences = False
 
         # loop on all hypothesized evidences
-        for id_medium, evidences in robot.getAnnotations_iter(evidenceLayer):
+        for id_medium, evidences in robot.getAnnotations_iter(evidenceLayerID):
             for evidence in evidences:
 
                 # get details abouth the evidence
@@ -136,7 +131,7 @@ def update(numberOfEvidencesInQueue):
 
                 # if this evidence has been checked already (locally)
                 # no need to check it twice
-                if person_name in description.mapping:
+                if person_name in labelLayer.description.mapping:
                     continue
 
                 # if this evidence has been checked already (globally)
@@ -147,20 +142,62 @@ def update(numberOfEvidencesInQueue):
                         "existing evidence - {name:s} - {source:s}".format(
                             name=person_name, source=source))
 
-                    description.mapping[person_name] = mapping[id_shot,
-                                                               person_name,
-                                                               source]
-                    robot.updateLayer(labelLayer, description=description)
+                    labelLayer.description.mapping[person_name] = \
+                        mapping[id_shot, person_name, source]
+                else:
+                    hasUncheckedEvidences = True
+
+        robot.updateLayer(labelLayerID, description=labelLayer.description)
+
+        # if all evidences have been checked, mark layer as such
+        if not hasUncheckedEvidences:
+            evidenceLayer.description['annotationsComplete'] = True
+            logger.debug("all evidences were checked for {layer:s}".format(
+                         layer=evidenceLayerID))
+            robot.updateLayer(evidenceLayerID,
+                              description=evidenceLayer.description)
+
+    # do not add any new evidence if the queue is already full
+    newEvidences = []
+    if numberOfEvidencesInQueue > limit:
+        return newEvidences
+
+    # for all evidence layers
+    for evidenceLayer in robot.getLayers(
+            test, data_type='mediaeval.persondiscovery.evidence'):
+
+        # skip original submission layers
+        if 'copy' not in evidenceLayer.description:
+            continue
+
+        # skip deleted submission layers
+        if 'deleted' in evidenceLayer.description:
+            continue
+
+        # skip if all evidences are already checked
+        if 'annotationsComplete' in evidenceLayer.description:
+            continue
+
+        # {evidence: id_evidence, label: id_label}
+        evidenceLayerID = evidenceLayer._id
+        labelLayerID = evidenceLayer.description.id_label
+
+        # loop on all hypothesized evidences
+        for id_medium, evidences in robot.getAnnotations_iter(evidenceLayerID):
+            for evidence in evidences:
+
+                # get details abouth the evidence
+                id_shot = evidence.fragment
+                person_name = evidence.data.person_name
+                source = evidence.data.source
 
                 # if this hypothesized evidence has not been checked yet
                 # push to evidence annotation frontend
-                else:
-
-                    hasUncheckedEvidences = True
+                if (id_shot, person_name, source) not in mapping:
 
                     item = {}
 
-                    item['id_submission'] = labelLayer
+                    item['id_submission'] = labelLayerID
                     item['person_name'] = person_name
                     item['source'] = source
 
@@ -179,13 +216,6 @@ def update(numberOfEvidencesInQueue):
                     if len(newEvidences) + numberOfEvidencesInQueue > limit:
                         return newEvidences
 
-        # if all evidences have been checked, mark layer as such
-        if not hasUncheckedEvidences:
-            description = layer.description
-            description['annotationsComplete'] = True
-            robot.updateLayer(evidenceLayer, description=description)
-            logger.debug("all evidences were checked for {layer:s}".format(
-                         layer=evidenceLayer))
 
     return newEvidences
 
