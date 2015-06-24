@@ -94,6 +94,18 @@ class RobotCamomile(Camomile):
             msg = 'Could not find any user with name "%s".'
             raise ValueError(msg % name)
 
+    def getGroupByName(self, name):
+
+        matchingGroups = [group._id for group in self.getGroups()
+                          if group.name == name]
+
+        if len(matchingGroups) == 1:
+            return matchingGroups[0]
+
+        else:
+            msg = 'Could not find any group with name "%s".'
+            raise ValueError(msg % name)
+
     def getQueueByName(self, name):
 
         matchingQueues = [queue._id for queue in self.getQueues()
