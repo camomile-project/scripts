@@ -191,52 +191,71 @@ while True:
             continue
 
         # which team ? which submission ?
-        team = layer.description.id_team
-        name = layer.name
+        teamID = layer.description.id_team
+        runName = layer.name
 
         logger.info(
-            "evaluating {team}'s {name}".format(team=teams[team], name=name))
+            "evaluating {teamID}'s {name}".format(teamID=teams[teamID], name=runName))
 
         # evaluate this submission and store MAP value
         mAP = computeMeanAveragePrecision(
             robot, layer._id, media, shots, qRelevant)
 
-        meanAveragePrecision.setdefault(team, {})[name] = mAP
+        meanAveragePrecision.setdefault(teamID, {})[runName] = mAP
 
     # rank all submissions based on their MAP
     ranking = set([])
-    for team, runs in meanAveragePrecision.iteritems():
-        for name, mAP in runs.iteritems():
-            ranking.add((team, name, mAP))
+    for teamID, runs in meanAveragePrecision.iteritems():
+        teamName = teams[teamID]
+        for runName, mAP in runs.iteritems():
+            ranking.add((teamID, teamName, runName, mAP))
     ranking = sorted(ranking, reverse=True, key=lambda s: s[2])
 
-    # "primary" leaderboard
-    primary = [(t, m) for t, n, m in ranking if n == 'primary']
-    for team, name in teams.iteritems():
+    for myTeamID, myTeamName in teams.iteritems():
 
-        privateRanking = []
+        primaryRanking = []
+        combinedRanking = []
+        teamBest = {}
 
-        for t, mAP in primary:
+        for otherTeamID, otherTeamName, runName, mAP in ranking:
 
-            if t == team:
-                privateName = name
+            mAP = '{mAP:.1f}'.format(mAP=100 * mAP)
+
+            if otherTeamName == myTeamName:
+                privateRunName = runName
+                privateTeamName = myTeamName[5:]
                 privateMeanAveragePrecision = mAP
-            elif name == 'team_baseline':
-                privateName = 'baseline'
+            elif otherTeamName == 'team_baseline':
+                privateRunName = 'baseline'
+                privateTeamName = 'baseline'
                 privateMeanAveragePrecision = mAP
             else:
-                privateName = '---'
-                privateMeanAveragePrecision = '---'
+                privateRunName = '?'
+                privateTeamName = '?'
+                privateMeanAveragePrecision = '?'
 
-            privateRanking.append((privateName, privateMeanAveragePrecision))
+            if runName == 'primary':
+                primaryRanking.append((privateTeamName, privateRunName,
+                                       privateMeanAveragePrecision))
+
+            if otherTeamName == myTeamName:
+                combinedRanking.append((privateTeamName, privateRunName,
+                                       privateMeanAveragePrecision))
+            else:
+                if not teamBest.get(otherTeamID, False):
+                    teamBest[otherTeamID] = True
+                    combinedRanking.append((privateTeamName, privateRunName,
+                                           privateMeanAveragePrecision))
 
         description = {}
-        description['date'] = datetime.now().isoformat()
-        description['ranking'] = privateRanking
+        description['date'] = datetime.now().strftime("%Y-%m-%d at %H:%M")
+        description['ranking'] = {}
+        description['ranking']['primary'] = primaryRanking
+        description['ranking']['combined'] = combinedRanking
         description['queries'] = nQueries
         description['shots'] = nShots
 
-        robot.updateLayer(leaderboard[team], description=description)
+        robot.updateLayer(leaderboard[myTeamID], description=description)
 
     logger.info("waiting for {period}s".format(period=period))
     sleep(period)
