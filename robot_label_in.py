@@ -309,7 +309,7 @@ while True:
         item['start'] = submissionShots[shot]['start'] + 0.5
         item['end'] = submissionShots[shot]['end'] - 0.5
         item['hypothesis'] = list(hypothesis)
-        item['others'] = list(ANCHORS) + list(others[shot])
+        item['others'] = list(ANCHORS - hypothesis) + list(others[shot] - ANCHORS - hypothesis)
         item['annotated_by'] = list(annotators)
 
         robot.enqueue_fair(labelInQueue, item, limit=limit)
