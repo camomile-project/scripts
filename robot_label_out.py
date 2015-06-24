@@ -106,7 +106,7 @@ for item in robot.dequeue_loop(labelOutQueue):
     # start by gathering all person names
     personNames = set([])
     for annotation in annotations:
-        personNames.update(annotation.data.known)
+        personNames.update(annotation.data.get('known', {}))
 
     # create an annotator x personName table
     df = DataFrame(columns=personNames.union(set(['?'])))
@@ -122,7 +122,7 @@ for item in robot.dequeue_loop(labelOutQueue):
         df.at[annotator, '?'] = 'speakingFace' if unknown else 'noFace'
 
         # store known annotation
-        known = annotation.data.known
+        known = annotation.data.get('known', {})
         for personName in personNames:
             # if the annotator annotated this personName
             # then we use his/her decision.
