@@ -47,6 +47,8 @@ Options:
   --period=N               Query label queue every N sec [default: 600].
   --limit=N                Approximate maximum number of items in
                            label queue [default: 400].
+  --onlyShotWithHypothesis put into the queue only shot with hypothesis 
+                           [default: True]
   --videos=PATH            List of video to process
   --other                  Number of alternative person names [default: 10]
   --log=DIR                Path to log directory.
@@ -80,6 +82,10 @@ period = int(arguments['--period'])
 
 # approximate maximum number of items in queue
 limit = int(arguments['--limit'])
+
+# put into the queue only shot with hypothesis
+onlyShotWithHypothesis = int(arguments['--onlyShotWithHypothesis'])
+
 
 # only annotate those videos
 videos = arguments['--videos']
@@ -294,7 +300,7 @@ while True:
         hypothesis = hypotheses[shot]
 
         # do not annotate a shot if there is no hypothesis
-        if hypothesis == set([]):
+        if hypothesis == set([]) and onlyShotWithHypothesis=='True':
             continue
 
         # do not annotate a shot for which at least
