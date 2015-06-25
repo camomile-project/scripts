@@ -293,6 +293,10 @@ while True:
 
         hypothesis = hypotheses[shot]
 
+        # do not annotate a shot if there is no hypothesis
+        if hypothesis == set([]):
+            continue
+
         # do not annotate a shot for which at least
         # one hypothesis does not have a mugshot
         if hypothesis - withMugshot:
