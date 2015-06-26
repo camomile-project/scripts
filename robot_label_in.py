@@ -301,8 +301,6 @@ def update(shots):
                 others[medium][shot].update(
                     shotWithConsensus[medium].get(nearShot, set([])))
 
-            print medium, shot, others[medium][shot]
-
             others[medium][shot].update(ANCHORS)
             others[medium][shot] -= hypotheses[medium][shot]
 
