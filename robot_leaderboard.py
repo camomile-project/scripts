@@ -131,7 +131,7 @@ evirefLayer = robot.getLayerByName(
 # teams
 teams = {team._id: team.name
          for team in robot.getGroups()
-         if team.name.startswith('team_')}
+         if team.name.startswith('team_') or team.name == 'organizer'}
 
 # leaderboard subset
 media = {medium.name: medium._id for medium in robot.getMedia(test)}
@@ -151,7 +151,6 @@ for team, team_name in teams.iteritems():
             fragment_type='', data_type=None,
             returns_id=True)
         robot.setLayerPermissions(leaderboard[team], robot.READ, group=team)
-
 
 while True:
 
@@ -225,7 +224,11 @@ while True:
 
             mAP = '{mAP:.1f}'.format(mAP=100 * mAP)
 
-            if otherTeamName == myTeamName:
+            if myTeamName == 'organizer':
+                privateRunName = runName
+                privateTeamName = otherTeamName
+                privateMeanAveragePrecision = mAP
+            elif otherTeamName == myTeamName:
                 privateRunName = runName
                 privateTeamName = myTeamName[5:]
                 privateMeanAveragePrecision = mAP
@@ -242,7 +245,7 @@ while True:
                 primaryRanking.append((privateTeamName, privateRunName,
                                        privateMeanAveragePrecision))
 
-            if otherTeamName == myTeamName:
+            if otherTeamName == myTeamName or myTeamName == 'organizer':
                 combinedRanking.append((privateTeamName, privateRunName,
                                        privateMeanAveragePrecision))
             else:
