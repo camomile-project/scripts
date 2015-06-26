@@ -163,7 +163,13 @@ while True:
             shot = annotation.fragment
             shots.add(shot)
 
-            for personName, status in annotation.get('data', {}).iteritems():
+            data = annotation.get('data', {})
+
+            # HACK - data might be u'' - I don't know why
+            if not data:
+                data = {}
+
+            for personName, status in data.iteritems():
 
                 # we are only looking for speaking-faces
                 if status != 'speakingFace':
