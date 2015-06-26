@@ -150,6 +150,7 @@ for item in robot.dequeue_loop(labelOutQueue):
         continue
 
     consensus = {}
+    hasConsensus = True
     for personName in personNames:
 
         counts = df[personName].value_counts()
@@ -159,7 +160,7 @@ for item in robot.dequeue_loop(labelOutQueue):
         expressedCounts = sum(count for status, count in counts.iteritems()
                               if status != 'dontKnow')
         if expressedCounts < 2:
-            consensus = {}
+            hasConsensus = False
             logger.debug(
                 "no consensus for shot {s} - "
                 "only {n} expressed annotation(s) for {p} ".format(
@@ -169,7 +170,7 @@ for item in robot.dequeue_loop(labelOutQueue):
         # no consensus if the most frequent is 'dontKnow'
         status = counts.argmax()
         if status == 'dontKnow':
-            consensus = {}
+            hasConsensus = False
             logger.debug(
                 "no consensus for shot {s} - "
                 "most frequent state for {p} is 'dontKnow'".format(
@@ -179,7 +180,7 @@ for item in robot.dequeue_loop(labelOutQueue):
         # no consensus if the highest frequency is < 2
         count = counts.max()
         if count < 2:
-            consensus = {}
+            hasConsensus = False
             logger.debug(
                 "no consensus for shot {s} - "
                 "most frequent state for {p} only has {n} vote(s)".format(
@@ -192,7 +193,7 @@ for item in robot.dequeue_loop(labelOutQueue):
         if ratio > 0.5:
             consensus[personName] = status
         else:
-            consensus = {}
+            hasConsensus = False
             logger.debug(
                 "no consensus for shot {s} - "
                 "most frequent state for {p} does not "
@@ -201,7 +202,7 @@ for item in robot.dequeue_loop(labelOutQueue):
             break
 
     # found consensus
-    if consensus:
+    if hasConsensus:
         robot.createAnnotation(
             consensusLayer,
             medium=medium, fragment=shot,
