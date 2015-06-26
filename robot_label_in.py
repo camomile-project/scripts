@@ -49,7 +49,7 @@ Options:
                             label queue [default: 400].
   --skip-empty              Put into the queue only shot with hypothesis
   --videos=PATH             List of video to process
-  --other                   Number of alternative person names [default: 10]
+  --other=N                 Number of alternative person names [default: 10]
   --log=DIR                 Path to log directory.
 """
 
@@ -165,9 +165,9 @@ def update(shots):
     # shots for which a consensus has already been reached
     shotWithConsensus = {}
     for medium in media:
-        shotWithConsensus[medium] = set([])
+        shotWithConsensus[medium] = {}
         for annotation in robot.getAnnotations(consensusLayer, medium=medium):
-            shotWithConsensus[medium].add(annotation.fragment)
+            shotWithConsensus[medium][annotation.fragment] = set(annotation.data.keys())
 
     # shots for which a unknown has been annotated
     shotWithUnknown = {}
@@ -181,14 +181,16 @@ def update(shots):
     remainingShots = {}
     for medium in media:
         remainingShots[medium] = shots[medium]
-        remainingShots[medium] -= shotWithConsensus[medium]
+        remainingShots[medium] -= set(shotWithConsensus[medium].keys())
         remainingShots[medium] -= shotWithUnknown[medium]
 
     logger.info('refresh - loading person names with mugshot')
 
     # set of person name with a mugshot
-    personNameWithMugshot = set([annotation.fragment
-        for annotation in robot.getAnnotations(mugshotLayer)])
+    personNameWithMugshot = set([
+        annotation.fragment
+        for _, A in robot.getAnnotations_iter(mugshotLayer)
+        for annotation in A])
 
     logger.info('refresh - loading hypothesized label layers')
 
@@ -280,16 +282,24 @@ def update(shots):
         others[medium] = {}
 
         for shot in hypotheses[medium]:
+
             others[medium][shot] = set([])
 
             i = sortedSubmissionShots[medium].index(shot)
             n = len(sortedSubmissionShots[medium])
-            nearShots = sortedSubmissionShots[medium][max(i - 5, 0):
-                                                      min(i + 5, n)]
+            nearShots = sortedSubmissionShots[medium][max(i - other, 0):
+                                                      min(i + other, n)]
 
             for nearShot in nearShots:
                 others[medium][shot].update(
                     hypotheses[medium].get(nearShot, set([])))
+
+            for nearShot in nearShots:
+                others[medium][shot].update(
+                    hypotheses[medium].get(nearShot, set([])))
+
+                others[medium][shot].update(
+                    shotWithConsensus[medium].get(nearShot, set([])))
 
             others[medium][shot].update(ANCHORS)
             others[medium][shot] -= hypotheses[medium][shot]
