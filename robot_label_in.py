@@ -168,8 +168,11 @@ def update(shots):
     for medium in media:
         shotWithConsensus[medium] = {}
         for annotation in robot.getAnnotations(consensusLayer, medium=medium):
-            shotWithConsensus[medium][annotation.fragment] = set(
-                annotation.get('data', {}).keys())
+            data = annotation.get('data', {})
+            # HACK - data might be u'' - I don't know why
+            if not data:
+                data = {}
+            shotWithConsensus[medium][annotation.fragment] = set(data)
 
     # shots for which a unknown has been annotated
     shotWithUnknown = {}
