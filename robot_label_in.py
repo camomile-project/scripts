@@ -36,22 +36,21 @@ Usage:
   robot_label_in [options]
 
 Options:
-  -h --help                Show this screen.
-  --version                Show version.
-  --debug                  Show debug information.
-  --url=URL                Camomile server URL
-                           [default: http://api.mediaeval.niderb.fr]
-  --password=P45sw0Rd      Password
-  --refresh=N              Refresh annotation status every N sec
-                           [default: 86400].
-  --period=N               Query label queue every N sec [default: 600].
-  --limit=N                Approximate maximum number of items in
-                           label queue [default: 400].
-  --onlyShotWithHypothesis put into the queue only shot with hypothesis 
-                           [default: True]
-  --videos=PATH            List of video to process
-  --other                  Number of alternative person names [default: 10]
-  --log=DIR                Path to log directory.
+  -h --help                 Show this screen.
+  --version                 Show version.
+  --debug                   Show debug information.
+  --url=URL                 Camomile server URL
+                            [default: http://api.mediaeval.niderb.fr]
+  --password=P45sw0Rd       Password
+  --refresh=N               Refresh annotation status every N sec
+                            [default: 86400].
+  --period=N                Query label queue every N sec [default: 600].
+  --limit=N                 Approximate maximum number of items in
+                            label queue [default: 400].
+  --skip-empty              Put into the queue only shot with hypothesis
+  --videos=PATH             List of video to process
+  --other                   Number of alternative person names [default: 10]
+  --log=DIR                 Path to log directory.
 """
 
 from common import RobotCamomile, create_logger
@@ -84,7 +83,7 @@ period = int(arguments['--period'])
 limit = int(arguments['--limit'])
 
 # put into the queue only shot with hypothesis
-onlyShotWithHypothesis = arguments['--onlyShotWithHypothesis']
+skipEmpty = arguments['--skip-empty']
 
 # only annotate those videos
 videos = arguments['--videos']
@@ -173,7 +172,7 @@ def update(shots):
     # shots for which a unknown has been annotated
     shotWithUnknown = {}
     for medium in media:
-        shotWithUnknown[medium] = set([])    
+        shotWithUnknown[medium] = set([])
         for annotation in robot.getAnnotations(unknownLayer, medium=medium):
             shotWithUnknown[medium].add(annotation.fragment)
 
@@ -181,7 +180,7 @@ def update(shots):
     # in order to reach a consensus
     remainingShots = {}
     for medium in media:
-        remainingShots[medium] = shots[medium] 
+        remainingShots[medium] = shots[medium]
         remainingShots[medium] -= shotWithConsensus[medium]
         remainingShots[medium] -= shotWithUnknown[medium]
 
@@ -195,7 +194,7 @@ def update(shots):
 
     # load mapping of all existing label layers
     layerMapping = {}
-    for layer in robot.getLayers(test, 
+    for layer in robot.getLayers(test,
                                  data_type='mediaeval.persondiscovery.label'):
 
         # skip original submission layers
@@ -234,7 +233,7 @@ def update(shots):
         for layer, mapping in layerMapping.iteritems():
             annotations = robot.getAnnotations(layer=layer, medium=medium)
 
-            for annotation in [annotation for annotation in annotations 
+            for annotation in [annotation for annotation in annotations
                                if annotation.fragment in remainingShots[medium]]:
 
                 shot = annotation.fragment
@@ -276,7 +275,7 @@ def update(shots):
 
     logger.info('refresh - gathering alternative hypotheses')
 
-    others = {}    
+    others = {}
     for medium in media:
         others[medium] = {}
 
@@ -309,7 +308,7 @@ while True:
 
         for shot in [shot for shot in sortedSubmissionShots[medium] if shot in hypotheses[medium]]:
             # do not annotate a shot if there is no hypothesis
-            if hypotheses[medium][shot] == set([]) and onlyShotWithHypothesis=='True':
+            if hypotheses[medium][shot] == set([]) and skipEmpty:
                 continue
 
             # do not annotate a shot for which at least
