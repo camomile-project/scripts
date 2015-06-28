@@ -237,14 +237,15 @@ def update(shots):
                 # get set of users who already annotated this shot
                 annotators[medium][shot] = set([annotation.data.annotator])
 
+        shot_to_skip = set([])
         for layer, mapping in layerMapping.iteritems():
             annotations = robot.getAnnotations(layer=layer, medium=medium)
 
+            skip = False
             for annotation in [a for a in annotations
                                if a.fragment in remainingShots[medium]]:
 
                 shot = annotation.fragment
-                skip = False
 
                 # find if (and how) the hypothesized name was mapped
                 hypothesizedPersonName = annotation.data.person_name
@@ -257,7 +258,7 @@ def update(shots):
                         'refresh - skipping shot {shot} because evidence '
                         'for {name} has not been checked yet.'.format(
                             shot=shot, name=hypothesizedPersonName))
-                    skip = True
+                    shot_to_skip.add(shot)
                     break
 
                 # in case it has been checked but found to NOT be an evidence
@@ -272,13 +273,14 @@ def update(shots):
                         'refresh - skipping shot {shot} because no mugshot '
                         'is available for {name}.'.format(
                             shot=shot, name=correctedPersonName))
-                    skip = True
+                    shot_to_skip.add(shot)
                     break
 
                 hypotheses[medium][shot].add(correctedPersonName)
 
-                if skip:
-                    hypotheses[medium][shot] = set([])
+        for shot in shot_to_skip:
+            del hypotheses[medium][shot]
+            del annotators[medium][shot]
 
     logger.info('refresh - gathering alternative hypotheses')
 
