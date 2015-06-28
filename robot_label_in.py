@@ -277,8 +277,8 @@ def update(shots):
 
                 hypotheses[medium][shot].add(correctedPersonName)
 
-            if skip:
-                hypotheses[medium][shot] = set([])
+                if skip:
+                    hypotheses[medium][shot] = set([])
 
     logger.info('refresh - gathering alternative hypotheses')
 
