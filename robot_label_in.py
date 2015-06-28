@@ -241,7 +241,6 @@ def update(shots):
         for layer, mapping in layerMapping.iteritems():
             annotations = robot.getAnnotations(layer=layer, medium=medium)
 
-            skip = False
             for annotation in [a for a in annotations
                                if a.fragment in remainingShots[medium]]:
 
