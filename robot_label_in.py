@@ -192,10 +192,8 @@ def update(shots):
     logger.info('refresh - loading person names with mugshot')
 
     # set of person name with a mugshot
-    personNameWithMugshot = set([
-        annotation.fragment
-        for _, A in robot.getAnnotations_iter(mugshotLayer)
-        for annotation in A])
+    personNameWithMugshot = set(
+        robot.getLayer(mugshotLayer).description.mugshots.keys())
 
     logger.info('refresh - loading hypothesized label layers')
 
