@@ -320,15 +320,14 @@ hypotheses, others, annotators, withMugshot = update(shots)
 while True:
     for medium in media:
 
-        for shot in [shot for shot in sortedSubmissionShots[medium]
-                     if shot in hypotheses[medium]]:
-            # do not annotate a shot if there is no hypothesis
-            if hypotheses[medium][shot] == set([]) and skipEmpty:
+        for shot in sortedSubmissionShots[medium]:
+
+            # shot was skipped
+            if shot not in hypotheses[medium]:
                 continue
 
-            # do not annotate a shot for which at least
-            # one hypothesis does not have a mugshot
-            if hypotheses[medium][shot] - withMugshot:
+            # do not annotate a shot if there is no hypothesis
+            if hypotheses[medium][shot] == set([]) and skipEmpty:
                 continue
 
             item = {}
