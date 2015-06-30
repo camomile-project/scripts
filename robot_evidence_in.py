@@ -234,6 +234,4 @@ while True:
 
         robot.enqueue(evidenceInQueue, item)
 
-    # if there are no new evidences, wait for a while
-    if not newEvidences:
-        sleep(period)
+    sleep(period)
