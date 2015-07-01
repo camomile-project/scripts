@@ -69,17 +69,15 @@ teams = {team._id: team.name
          for team in client.getGroups()
          if team.name.startswith('team_') or team.name == 'organizer'}
 
-media = {medium.name: medium._id for medium in client.getMedia(test)}
-
+media = {medium._id: medium.name for medium in client.getMedia(test)}
 
 shotLayer = client.getLayers(test, name='mediaeval.submission_shot')[0]._id
 
 print "get the shot number"
 shots = {}
-for medium, id_medium in media.items():
-    shots[medium] = {}
-    for a in client.getAnnotations(shotLayer, medium=id_medium ):
-        shots[medium][a._id] = a.fragment.shot_number
+for a in client.getAnnotations(shotLayer):
+    shots.setdefault(a.id_medium, {})
+    shots[a.id_medium][a._id] = a.fragment.shot_number
 
 # evaluate every original submissions
 for labelLayer in client.getLayers(
@@ -94,16 +92,33 @@ for labelLayer in client.getLayers(
 
     print teams[labelLayer.description.id_team], labelLayer.name
 
+    annotations = []
+    try :
+      annotations = client.getAnnotations(labelLayer._id)
+    except Exception:
+        print 'medium per medium'
+        annotations = []
+        for id_medium in media:
+            for a in client.getAnnotations(labelLayer._id, medium=id_medium):
+                annotations.append(a)
+
     fout = open(output_path+'/'+teams[labelLayer.description.id_team]+'.'+labelLayer.name+'.label' , 'w')
-    for medium, id_medium in sorted(media.items()):
-        for a in client.getAnnotations(labelLayer._id, medium=id_medium):
-            fout.write(medium+' '+str(shots[medium][a.fragment])+' '+a.data.person_name+' '+str(a.data.confidence)+'\n')
+    for a in annotations:
+        fout.write(media[a.id_medium]+' '+str(shots[a.id_medium][a.fragment])+' '+a.data.person_name+' '+str(a.data.confidence)+'\n')
     fout.close()
-    
+
+    annotations = []
+    try :
+        annotations = client.getAnnotations(labelLayer.description.id_evidence)
+    except Exception:
+        print 'medium per medium'
+        for id_medium in media:
+            for a in client.getAnnotations(labelLayer.description.id_evidence, medium=id_medium):
+                annotations.append(a)
+
     fout = open(output_path+'/'+teams[labelLayer.description.id_team]+'.'+labelLayer.name+'.evidence' , 'w')
-    for medium, id_medium in sorted(media.items()):
-        for a in client.getAnnotations(labelLayer.description.id_evidence, medium=id_medium):
-            fout.write(a.data.person_name+" "+medium+' '+str(shots[medium][a.fragment])+' '+a.data.source+'\n')
+    for a in annotations:
+        fout.write(a.data.person_name+" "+media[a.id_medium]+' '+str(shots[a.id_medium][a.fragment])+' '+a.data.source+'\n')
     fout.close()
 
 
