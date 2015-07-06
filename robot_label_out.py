@@ -198,7 +198,7 @@ for item in robot.dequeue_loop(labelOutQueue):
                 "no consensus for shot {s} - "
                 "most frequent state for {p} does not "
                 "have majority ({r:d}%)".format(
-                    s=shot, p=personName, r=100 * ratio))
+                    s=shot, p=personName, r=int(100 * ratio)))
             break
 
     # found consensus
