@@ -203,8 +203,19 @@ for item in robot.dequeue_loop(labelOutQueue):
 
     # found consensus
     if hasConsensus:
+
+        # get previously existing consensus
+        annotations = robot.getAnnotations(layer=consensusLayer,
+                                           fragment=shot,
+                                           returns_id=True)
+
+        # create new one
         robot.createAnnotation(
             consensusLayer,
             medium=medium, fragment=shot,
             data=consensus, returns_id=True)
         logger.info("found consensus for shot {s}".format(s=shot))
+
+        # remove old ones
+        for annotation in annotations:
+            robot.deleteAnnotation(annotation)
