@@ -134,10 +134,21 @@ for item in robot.dequeue_loop(labelOutQueue):
             df.at[annotator, personName] = status
 
     if df['?'].value_counts().get('speakingFace', 0) > 0:
+
+        # get previously existing unknown
+        annotations = robot.getAnnotations(layer=unknownLayer,
+                                           fragment=shot,
+                                           returns_id=True)
+        # create a new one
         robot.createAnnotation(unknownLayer,
                                medium=medium, fragment=shot,
                                data=None, returns_id=True)
         logger.info('found unknown in shot {shot}'.format(shot=shot))
+
+        # delete old ones
+        for annotation in annotations:
+            robot.deleteAnnotation(annotation)
+
         continue
 
     # no consensus until we have at least 2 annotators
@@ -198,7 +209,7 @@ for item in robot.dequeue_loop(labelOutQueue):
                 "no consensus for shot {s} - "
                 "most frequent state for {p} does not "
                 "have majority ({r:d}%)".format(
-                    s=shot, p=personName, r=100 * ratio))
+                    s=shot, p=personName, r=int(100 * ratio)))
             break
 
     # found consensus

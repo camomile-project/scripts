@@ -51,6 +51,7 @@ Options:
   --videos=PATH             List of video to process
   --other=N                 Number of alternative person names [default: 10]
   --log=DIR                 Path to log directory.
+  --queue=NAME              Label incoming queue [default: mediaeval.label.in]
 """
 
 from common import RobotCamomile, create_logger
@@ -90,6 +91,8 @@ videos = arguments['--videos']
 
 other = int(arguments['--other'])
 
+queueName = arguments['--queue']
+
 robot = RobotCamomile(
     url, 'robot_label', password=password,
     period=period, logger=logger)
@@ -118,8 +121,7 @@ mugshotLayer = robot.getLayerByName(
     test, 'mediaeval.groundtruth.evidence.mugshot')
 
 # filled by this script and popped by label annotation front-end
-labelInQueue = robot.getQueueByName(
-    'mediaeval.label.in')
+labelInQueue = robot.getQueueByName(queueName)
 
 # load list of media in test corpus
 # as {name: id} dictionary
