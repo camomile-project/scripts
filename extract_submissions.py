@@ -45,8 +45,32 @@ Options:
 from camomile import Camomile
 from docopt import docopt
 from getpass import getpass
+import unicodedata
 
 arguments = docopt(__doc__, version='0.1')
+
+list_c="abcdefghijklmnopqrstuvwxyz_" 
+
+def normalize(p):
+    p = unicodedata.normalize('NFD',p)
+    p = p.encode('ascii','ignore')      
+    p = p.lower()
+
+    for i in range(len(p)):
+        if p[i] not in list_c:
+            p[i] == '_'
+
+    while '__' in p:
+        p = p.replace('__', '_')
+
+    if p[0] == '_':
+        p = p[1:]
+
+    if p[-1] == '_':
+        p = p[:-1]
+
+    return p
+
 
 url = arguments['--url']
 output_path = arguments['<output_path>']
@@ -102,9 +126,11 @@ for labelLayer in client.getLayers(
             for a in client.getAnnotations(labelLayer._id, medium=id_medium):
                 annotations.append(a)
 
+
     fout = open(output_path+'/'+teams[labelLayer.description.id_team]+'.'+labelLayer.name+'.label' , 'w')
     for a in annotations:
-        fout.write(media[a.id_medium]+' '+str(shots[a.id_medium][a.fragment])+' '+a.data.person_name+' '+str(a.data.confidence)+'\n')
+        p = normalize(a.data.person_name)
+        fout.write(media[a.id_medium]+' '+str(shots[a.id_medium][a.fragment])+' '+p+' '+str(a.data.confidence)+'\n')
     fout.close()
 
     annotations = []
@@ -118,7 +144,8 @@ for labelLayer in client.getLayers(
 
     fout = open(output_path+'/'+teams[labelLayer.description.id_team]+'.'+labelLayer.name+'.evidence' , 'w')
     for a in annotations:
-        fout.write(a.data.person_name+" "+media[a.id_medium]+' '+str(shots[a.id_medium][a.fragment])+' '+a.data.source+'\n')
+        p = normalize(a.data.person_name)
+        fout.write(p+" "+media[a.id_medium]+' '+str(shots[a.id_medium][a.fragment])+' '+a.data.source+'\n')
     fout.close()
 
 
