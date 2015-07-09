@@ -313,14 +313,14 @@ def update(shots):
             others[medium][shot].update(ANCHORS)
             others[medium][shot] -= hypotheses[medium][shot]
 
-    logger.info('refresh is finish')
-
     return hypotheses, others, annotators, personNameWithMugshot
 
 
 t = datetime.now()
-
 hypotheses, others, annotators, withMugshot = update(shots)
+now = datetime.now()
+logger.info('refresh - finished in {seconds:d} seconds'.format(
+    seconds=int((now - t).total_seconds())))
 
 while True:
     for medium in media:
@@ -349,6 +349,9 @@ while True:
 
             robot.enqueue_fair(labelInQueue, item, limit=limit)
 
-            if (datetime.now() - t).total_seconds() > refresh:
+            now = datetime.now()
+            if (now - t).total_seconds() > refresh:
                 hypotheses, others, annotators, withMugshot = update(shots)
                 t = datetime.now()
+                logger.info('refresh - finished in {seconds:d} seconds'.format(
+                    seconds=int((t - now).total_seconds())))
