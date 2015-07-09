@@ -145,7 +145,7 @@ for medium in media:
     submissionShots[medium] = {}
     for shot in robot.getAnnotations(submissionShotLayer, medium=medium):
         submissionShots[medium][shot._id] = {
-            'id_medium': medium,
+            'id_medium': shot.id_medium,
             'start': shot.fragment.segment.start,
             'end': shot.fragment.segment.end}
 
@@ -161,6 +161,37 @@ shots = {}
 for medium in media:
     shots[medium] = set([s for s, d in submissionShots[medium].iteritems()
                          if d['id_medium'] == medium])
+
+logger.info('load mapping of all existing label layers')
+
+# load mapping of all existing label layers
+layerMapping = {}
+for layer in robot.getLayers(test,
+                             data_type='mediaeval.persondiscovery.label'):
+
+    # skip original submission layers
+    if 'copy' not in layer.description:
+        continue
+
+    # skip deleted submission layers
+    if 'deleted' in layer.description:
+        continue
+
+    # default to empty mapping
+    layerMapping[layer._id] = layer.description.get('mapping', {})
+
+logger.info('get hypotheses person names')
+
+# get hypothesis person names
+annotationHypotheses = {}
+for layer in layerMapping:
+    annotationHypotheses[layer] = {}
+    for medium in media:
+        annotationHypotheses[layer][medium] = {}
+        for shot in submissionShots[medium]:
+            annotationHypotheses[layer][medium][shot] = set([])
+        for a in robot.getAnnotations(layer=layer, medium=medium):
+            annotationHypotheses[layer][medium][a.fragment].add(a.data.person_name)            
 
 
 def update(shots):
@@ -194,29 +225,15 @@ def update(shots):
         remainingShots[medium] -= set(shotWithConsensus[medium].keys())
         remainingShots[medium] -= shotWithUnknown[medium]
 
+    # update layer mapping
+    for layer in layerMapping:
+        layerMapping[layer] = robot.getLayer(layer).description.get('mapping', {})
+
     logger.info('refresh - loading person names with mugshot')
 
     # set of person name with a mugshot
     personNameWithMugshot = set(
         robot.getLayer(mugshotLayer).description.mugshots.keys())
-
-    logger.info('refresh - loading hypothesized label layers')
-
-    # load mapping of all existing label layers
-    layerMapping = {}
-    for layer in robot.getLayers(test,
-                                 data_type='mediaeval.persondiscovery.label'):
-
-        # skip original submission layers
-        if 'copy' not in layer.description:
-            continue
-
-        # skip deleted submission layers
-        if 'deleted' in layer.description:
-            continue
-
-        # default to empty mapping
-        layerMapping[layer._id] = layer.description.get('mapping', {})
 
     logger.info('refresh - building hypothesis for remaining shots')
 
@@ -226,13 +243,13 @@ def update(shots):
         hypotheses[medium] = {}
         annotators[medium] = {}
 
-        annotations = robot.getAnnotations(layer=allLayer, medium=medium)
+        allAnnotations = robot.getAnnotations(layer=allLayer, medium=medium)
 
         for shot in remainingShots[medium]:
             hypotheses[medium][shot] = set([])
             annotators[medium][shot] = set([])
 
-            for annotation in [a for a in annotations if a.fragment == shot]:
+            for annotation in [a for a in allAnnotations if a.fragment == shot]:
                 # get set of all hypothesis already annotated
                 hypotheses[medium][shot].update(
                     set(annotation.data.get('known', {}).keys()))
@@ -240,49 +257,47 @@ def update(shots):
                 # get set of users who already annotated this shot
                 annotators[medium][shot] = set([annotation.data.annotator])
 
-        shot_to_skip = set([])
-        for layer, mapping in layerMapping.iteritems():
-            annotations = robot.getAnnotations(layer=layer, medium=medium)
+            skip_shot = False
+            for layer, mapping in layerMapping.iteritems():
 
-            for annotation in [a for a in annotations
-                               if a.fragment in remainingShots[medium]]:
+                for hypothesizedPersonName in annotationHypotheses[layer][medium][shot]:
 
-                shot = annotation.fragment
+                    # find how the hypothesized name was mapped
+                    correctedPersonName = mapping.get(hypothesizedPersonName, None)
 
-                # find if (and how) the hypothesized name was mapped
-                hypothesizedPersonName = annotation.data.person_name
-                correctedPersonName = mapping.get(hypothesizedPersonName, None)
+                    # in case it has not been checked yet
+                    # skip this shot entirely
+                    if correctedPersonName is None:
+                        logger.info(
+                            'refresh - skipping shot {shot} because evidence '
+                            'for {name} has not been checked yet.'.format(
+                                shot=shot, name=hypothesizedPersonName))
+                        skip_shot = True
+                        break
 
-                # in case it has not been checked yet
-                # skip this shot entirely
-                if correctedPersonName is None:
-                    logger.info(
-                        'refresh - skipping shot {shot} because evidence '
-                        'for {name} has not been checked yet.'.format(
-                            shot=shot, name=hypothesizedPersonName))
-                    shot_to_skip.add(shot)
+                    # in case it has been checked but found to NOT be an evidence
+                    # don't add this hypothesis
+                    if correctedPersonName is False:
+                        continue
+
+                    # in case the mapped person name does not have a mugshot yet
+                    # skip this shot entirely
+                    if correctedPersonName not in personNameWithMugshot:
+                        logger.info(
+                            'refresh - skipping shot {shot} because no mugshot '
+                            'is available for {name}.'.format(
+                                shot=shot, name=correctedPersonName))
+                        skip_shot = True
+                        break
+
+                    hypotheses[medium][shot].add(correctedPersonName)
+
+                if skip_shot:
                     break
 
-                # in case it has been checked but found to NOT be an evidence
-                # don't add this hypothesis
-                if correctedPersonName is False:
-                    continue
-
-                # in case the mapped person name does not have a mugshot yet
-                # skip this shot entirely
-                if correctedPersonName not in personNameWithMugshot:
-                    logger.info(
-                        'refresh - skipping shot {shot} because no mugshot '
-                        'is available for {name}.'.format(
-                            shot=shot, name=correctedPersonName))
-                    shot_to_skip.add(shot)
-                    break
-
-                hypotheses[medium][shot].add(correctedPersonName)
-
-        for shot in shot_to_skip:
-            del hypotheses[medium][shot]
-            del annotators[medium][shot]
+            if skip_shot:
+                del hypotheses[medium][shot]
+                del annotators[medium][shot]
 
     logger.info('refresh - gathering alternative hypotheses')
 
@@ -291,7 +306,6 @@ def update(shots):
         others[medium] = {}
 
         for shot in hypotheses[medium]:
-
             others[medium][shot] = set([])
 
             i = sortedSubmissionShots[medium].index(shot)
@@ -299,18 +313,15 @@ def update(shots):
             nearShots = sortedSubmissionShots[medium][max(i - other, 0):
                                                       min(i + other, n)]
 
+            others[medium][shot].update(ANCHORS)
             for nearShot in nearShots:
-                others[medium][shot].update(
-                    hypotheses[medium].get(nearShot, set([])))
-
-            for nearShot in nearShots:
-                others[medium][shot].update(
-                    hypotheses[medium].get(nearShot, set([])))
-
                 others[medium][shot].update(
                     shotWithConsensus[medium].get(nearShot, set([])))
 
-            others[medium][shot].update(ANCHORS)
+                others[medium][shot].update(
+                    hypotheses[medium].get(nearShot, set([])))
+
+            # remove person already in hypotheses
             others[medium][shot] -= hypotheses[medium][shot]
 
     return hypotheses, others, annotators, personNameWithMugshot
