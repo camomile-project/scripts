@@ -52,6 +52,7 @@ Options:
   --other=N                 Number of alternative person names [default: 10]
   --log=DIR                 Path to log directory.
   --queue=NAME              Label incoming queue [default: mediaeval.label.in]
+  --no-unknown-consensus    Stop looking for consensus when unknown
 """
 
 from common import RobotCamomile, create_logger
@@ -68,6 +69,7 @@ arguments = docopt(__doc__, version='0.1')
 # Camomile API
 url = arguments['--url']
 password = arguments['--password']
+noUnknownConsensus = arguments['--no-unknown-consensus']
 
 # debugging and logging
 debug = arguments['--debug']
@@ -180,8 +182,9 @@ def update(shots):
     shotWithUnknown = {}
     for medium in media:
         shotWithUnknown[medium] = set([])
-        for annotation in robot.getAnnotations(unknownLayer, medium=medium):
-            shotWithUnknown[medium].add(annotation.fragment)
+        if noUnknownConsensus:
+            for annotation in robot.getAnnotations(unknownLayer, medium=medium):
+                shotWithUnknown[medium].add(annotation.fragment)
 
     # shots for which we are still missing annotations
     # in order to reach a consensus
