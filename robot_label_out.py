@@ -43,17 +43,21 @@ Options:
   --password=P45sw0Rd      Password
   --period=N               Query evidence queue every N sec [default: 600].
   --log=DIR                Path to log directory.
+  --no-unknown-consensus   Stop looking for consensus when unknown
 """
 
 from common import RobotCamomile, create_logger
 from docopt import docopt
 from pandas import DataFrame
 
+UNKNOWN = '?unknown?'
+
 arguments = docopt(__doc__, version='0.1')
 
 url = arguments['--url']
 password = arguments['--password']
 period = int(arguments['--period'])
+noUnknownConsensus = arguments['--no-unknown-consensus']
 
 debug = arguments['--debug']
 log = arguments['--log']
@@ -109,7 +113,7 @@ for item in robot.dequeue_loop(labelOutQueue):
         personNames.update(annotation.data.get('known', {}))
 
     # create an annotator x personName table
-    df = DataFrame(columns=personNames.union(set(['?'])))
+    df = DataFrame(columns=personNames.union(set([UNKNOWN])))
 
     # fill this table...
     for a, annotation in enumerate(annotations):
@@ -119,7 +123,7 @@ for item in robot.dequeue_loop(labelOutQueue):
 
         # store whether annotator found an unknown speaking face
         unknown = annotation.data.unknown
-        df.at[annotator, '?'] = 'speakingFace' if unknown else 'noFace'
+        df.at[annotator, UNKNOWN] = 'speakingFace' if unknown else 'noFace'
 
         # store known annotation
         known = annotation.data.get('known', {})
@@ -133,7 +137,7 @@ for item in robot.dequeue_loop(labelOutQueue):
                                'dontKnow' if unknown else 'noFace')
             df.at[annotator, personName] = status
 
-    if df['?'].value_counts().get('speakingFace', 0) > 0:
+    if noUnknownConsensus and df[UNKNOWN].value_counts().get('speakingFace', 0) > 0:
 
         # get previously existing unknown
         annotations = robot.getAnnotations(layer=unknownLayer,
@@ -162,7 +166,7 @@ for item in robot.dequeue_loop(labelOutQueue):
 
     consensus = {}
     hasConsensus = True
-    for personName in personNames:
+    for personName in df:
 
         counts = df[personName].value_counts()
 
