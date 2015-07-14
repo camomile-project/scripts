@@ -191,7 +191,7 @@ for layer in layerMapping:
         for shot in submissionShots[medium]:
             annotationHypotheses[layer][medium][shot] = set([])
         for a in robot.getAnnotations(layer=layer, medium=medium):
-            annotationHypotheses[layer][medium][a.fragment].add(a.data.person_name)            
+            annotationHypotheses[layer][medium][a.fragment].add(a.data.person_name)
 
 
 def update(shots):
@@ -243,7 +243,12 @@ def update(shots):
         hypotheses[medium] = {}
         annotators[medium] = {}
 
-        allAnnotations = robot.getAnnotations(layer=allLayer, medium=medium)
+        try:
+            allAnnotations = robot.getAnnotations(layer=allLayer, medium=medium)
+        except Exception as e:
+            logger.error(
+                'refresh - error with medium {medium}'.format(medium=medium))
+            continue
 
         for shot in remainingShots[medium]:
             hypotheses[medium][shot] = set([])
