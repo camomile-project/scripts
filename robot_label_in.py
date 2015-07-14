@@ -240,6 +240,7 @@ def update(shots):
     hypotheses = {}
     annotators = {}
     for medium in media:
+
         hypotheses[medium] = {}
         annotators[medium] = {}
 
