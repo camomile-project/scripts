@@ -58,6 +58,7 @@ Options:
 from common import RobotCamomile, create_logger
 from docopt import docopt
 from datetime import datetime
+from random import sample
 
 ANCHORS = set(["david_pujadas",
                "beatrice_schonberg",
@@ -340,9 +341,11 @@ logger.info('refresh - finished in {seconds:d} seconds'.format(
     seconds=int((now - t).total_seconds())))
 
 while True:
-    for medium in media:
 
-        for shot in sortedSubmissionShots[medium]:
+    for medium in sample(media, len(media)):
+
+        n = len(sortedSubmissionShots[medium])
+        for shot in sample(sortedSubmissionShots[medium], n):
 
             # shot was skipped
             if shot not in hypotheses[medium]:
