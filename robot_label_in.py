@@ -333,19 +333,18 @@ def update(shots):
 
     return hypotheses, others, annotators, personNameWithMugshot
 
-
-t = datetime.now()
-hypotheses, others, annotators, withMugshot = update(shots)
-now = datetime.now()
-logger.info('refresh - finished in {seconds:d} seconds'.format(
-    seconds=int((now - t).total_seconds())))
-
 while True:
 
+    now = datetime.now()
+    hypotheses, others, annotators, withMugshot = update(shots)
+    t = datetime.now()
+    logger.info('refresh - finished in {seconds:d} seconds'.format(
+        seconds=int((t - now).total_seconds())))
+
+    # randomize media order
     for medium in sample(media, len(media)):
 
-        n = len(sortedSubmissionShots[medium])
-        for shot in sample(sortedSubmissionShots[medium], n):
+        for shot in sortedSubmissionShots[medium]:
 
             # shot was skipped
             if shot not in hypotheses[medium]:
@@ -364,14 +363,7 @@ while True:
             item['others'] = list(others[medium][shot])
             item['annotated_by'] = list(annotators[medium][shot])
 
-            logger.info('new annotation for shot {shot}'.format(
-                        shot=shot))
+            logger.debug('new annotation for shot {shot}'.format(
+                shot=shot))
 
             robot.enqueue_fair(labelInQueue, item, limit=limit)
-
-            now = datetime.now()
-            if (now - t).total_seconds() > refresh:
-                hypotheses, others, annotators, withMugshot = update(shots)
-                t = datetime.now()
-                logger.info('refresh - finished in {seconds:d} seconds'.format(
-                    seconds=int((t - now).total_seconds())))
