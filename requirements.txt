@@ -1,4 +1,4 @@
-camomile>=0.7
+camomile>=0.7.1
 docopt>=0.6.2
 pandas>=0.16.1
 scikit-learn>=0.16.1
