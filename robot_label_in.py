@@ -60,10 +60,13 @@ from docopt import docopt
 from datetime import datetime
 from random import sample
 
+emptyAtLaunch = True
+
 ANCHORS = set(["david_pujadas",
                "beatrice_schonberg",
                "laurent_delahousse",
                "francoise_laborde"])
+UNKNOWN = '?unknown?'
 
 arguments = docopt(__doc__, version='0.1')
 
@@ -322,6 +325,9 @@ def update(medium):
         # remove person already in hypotheses
         others[shot] -= hypotheses[shot]
 
+        # remove ?unknown?
+        others[shot] -= set([UNKNOWN])
+
     return hypotheses, others, annotators
 
 while True:
@@ -358,5 +364,10 @@ while True:
 
             logger.debug('new annotation for shot {shot}'.format(
                 shot=shot))
+
+            # empty queue at launch time
+            if emptyAtLaunch:
+                robot.updateQueue(labelInQueue, elements=[])
+                emptyAtLaunch = False
 
             robot.enqueue_fair(labelInQueue, item, limit=limit)
