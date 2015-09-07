@@ -53,6 +53,7 @@ Options:
   --log=DIR                 Path to log directory.
   --queue=NAME              Label incoming queue [default: mediaeval.label.in]
   --no-unknown-consensus    Stop looking for consensus when unknown
+  --queries=list            Put into the queue only shot with hypothesis in the list of queries
 """
 
 from common import RobotCamomile, create_logger
@@ -91,6 +92,13 @@ limit = int(arguments['--limit'])
 
 # put into the queue only shot with hypothesis
 skipEmpty = arguments['--skip-empty']
+
+# put into the queue only shot with hypothesis in the list of queries
+queries = False
+if arguments['--queries']:
+    queries = set([])
+    for line in open(arguments['--queries']).read().splitlines():
+        queries.add(line)
 
 # only annotate those videos
 videos = arguments['--videos']
@@ -330,6 +338,8 @@ def update(medium):
 
     return hypotheses, others, annotators
 
+
+
 while True:
 
     # randomize media order
@@ -353,6 +363,9 @@ while True:
             if hypotheses[shot] == set([]) and skipEmpty:
                 continue
 
+            if queries and not hypotheses[shot].intersection(queries):
+                continue
+
             item = {}
             item['id_shot'] = shot
             item['id_medium'] = SUBMISSION_SHOTS[medium][shot]['id_medium']
@@ -371,3 +384,4 @@ while True:
                 emptyAtLaunch = False
 
             robot.enqueue_fair(labelInQueue, item, limit=limit)
+            
